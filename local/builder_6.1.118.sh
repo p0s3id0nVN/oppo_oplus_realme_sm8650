@@ -1,19 +1,19 @@
 #!/bin/bash
 set -e
 
-# ===== 获取脚本目录 =====
+# ===== Lấy thư mục chứa tập lệnh =====
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# ===== 设置自定义参数 =====
-echo "===== 欧加真SM8650通用6.1.118 A15 OKI内核本地编译脚本 By Coolapk@cctv18 ====="
-echo ">>> 读取用户配置..."
+# ===== Thiết lập các tham số tùy chỉnh =====
+echo "===== OKI SM8650 Universal 6.1.118 A15 OKI Kernel Local Compilation Script By Coolapk@cctv18 ====="
+echo ">>> Đọc cấu hình người dùng..."
 MANIFEST=${MANIFEST:-oppo+oplus+realme}
-read -p "请输入自定义内核后缀（默认：android14-11-o-gca13bffobf09）: " CUSTOM_SUFFIX
+read -p "ui lòng nhập hậu tố kernel tùy chỉnh (mặc định)：android14-11-o-gca13bffobf09）: " CUSTOM_SUFFIX
 CUSTOM_SUFFIX=${CUSTOM_SUFFIX:-android14-11-o-gca13bffobf09}
-read -p "是否启用susfs？(y/n，默认：y): " APPLY_SUSFS
+read -p "Bật susfs？(y/n，Mặc định：y): " APPLY_SUSFS
 APPLY_SUSFS=${APPLY_SUSFS:-y}
-read -p "是否启用 KPM？(b-(re)sukisu内置kpm, k-kernelpatch next独立kpm实现, n-关闭kpm，默认：n): " USE_PATCH_LINUX
+read -p "Bật KPM？(b - (re)sukisu kpm tích hợp sẵn, k-kernelpatch next triển khai KPM độc lập, n-KPM đã bị vô hiệu hóa; mặc định: n): " USE_PATCH_LINUX
 USE_PATCH_LINUX=${USE_PATCH_LINUX:-n}
 read -p "KSU分支版本(r=ReSukiSU, y=SukiSU Ultra, n=KernelSU Next, k=KSU, l=lkm模式(无内置KSU), 默认：r): " KSU_BRANCH
 KSU_BRANCH=${KSU_BRANCH:-r}
@@ -53,28 +53,26 @@ else
 fi
 
 echo
-echo "===== 配置信息 ====="
-echo "适用机型: $MANIFEST"
-echo "自定义内核后缀: -$CUSTOM_SUFFIX"
-echo "KSU分支版本: $KSU_TYPE"
-echo "启用susfs: $APPLY_SUSFS"
-echo "启用 KPM: $KPM_TYPE"
-echo "应用 lz4&zstd 补丁: $APPLY_LZ4"
-echo "应用 lz4kd 补丁: $APPLY_LZ4KD"
-echo "应用网络功能增强优化配置: $APPLY_BETTERNET"
-echo "应用 BBR 等算法: $APPLY_BBR"
-echo "启用三星SSG IO调度器: $APPLY_SSG"
-echo "启用Re-Kernel: $APPLY_REKERNEL"
-echo "启用内核级基带保护: $APPLY_BBG"
-echo "===================="
-echo
+echo "===== Thông tin cấu hình ====="
+echo "Các mẫu áp dụng: $MANIFEST"
+echo "Hậu tố Kernel tùy chỉnh: -$CUSTOM_SUFFIX"
+echo "Phiên bản nhánh KSU: $KSU_TYPE"
+echo "Bật susfs: $APPLY_SUSFS"
+echo "Bật KPM: $KPM_TYPE"
+echo "Áp dụng các bản vá lz4 & zstd: $APPLY_LZ4"
+echo "Áp dụng các bản vá lz4kd: $APPLY_LZ4KD"
+echo "Áp dụng cấu hình tối ưu hóa nâng cao mạng: $APPLY_BETTERNET"
+echo "Áp dụng BBR và các thuật toán khác: $APPLY_BBR"
+echo "Bật bộ lập lịch IO SSG của Samsung: $APPLY_SSG"
+echo "Bật Re-Kernel: $APPLY_REKERNEL"
+echo "Bật Baseband cấp Kernel" Bảo vệ: $APPLY_BBG" "====================" echo
 
-# ===== 创建工作目录 =====
+# ===== Tạo thư mục làm việc =====
 WORKDIR="$SCRIPT_DIR"
 cd "$WORKDIR"
 
-# ===== 安装构建依赖 =====
-echo ">>> 安装构建依赖..."
+# ===== Cài đặt các thư viện cần thiết để biên dịch =====
+echo ">>> Cài đặt các thư viện cần thiết để biên dịch..."
 
 # Function to run a command with sudo if not already root
 SU() {
@@ -92,13 +90,13 @@ SU apt-get install --no-install-recommends -y curl bison flex clang binutils dwa
 SU rm -rf ./llvm.sh && wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh
 SU ./llvm.sh 20 all
 
-# ===== 初始化仓库 =====
-echo ">>> 初始化仓库..."
+# ===== Khởi tạo kho lưu trữ =====
+echo ">>> Khởi tạo kho lưu trữ..."
 rm -rf kernel_workspace
 mkdir kernel_workspace
 cd kernel_workspace
 git clone --depth=1 https://github.com/cctv18/android_kernel_common_oneplus_sm8650 -b oneplus/sm8650_b_16.0.0_oneplus12 common
-echo ">>> 初始化仓库完成"
+echo ">>> Quá trình khởi tạo kho lưu trữ hoàn tất"
 
 # ===== 清除 abi 文件、去除 -dirty 后缀 =====
 echo ">>> 正在清除 ABI 文件及去除 dirty 后缀..."
@@ -109,42 +107,42 @@ for f in common/scripts/setlocalversion; do
   sed -i '$i res=$(echo "$res" | sed '\''s/-dirty//g'\'')' "$f"
 done
 
-# ===== 替换版本后缀 =====
-echo ">>> 替换内核版本后缀..."
+# ===== Thay thế hậu tố phiên bản =====
+echo ">>> Thay thế hậu tố phiên bản kernel..."
 for f in ./common/scripts/setlocalversion; do
   sed -i "\$s|echo \"\\\$res\"|echo \"-${CUSTOM_SUFFIX}\"|" "$f"
 done
 
-# ===== 拉取 KSU 并设置版本号 =====
+# ===== Truy xuất KSU và thiết lập số phiên bản =====
 if [[ "$KSU_BRANCH" == "y" || "$KSU_BRANCH" == "Y" ]]; then
-  echo ">>> 拉取 SukiSU-Ultra 并设置版本..."
+  echo ">>> Tải SukiSU-Ultra và thiết lập phiên bản..."
   curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/main/kernel/setup.sh" | bash -s builtin
   cd KernelSU
   GIT_COMMIT_HASH=$(git rev-parse --short=8 HEAD)
-  echo "当前提交哈希: $GIT_COMMIT_HASH"
-  echo ">>> 正在获取上游 API 版本信息..."
+  echo "Mã băm của commit hiện tại: $GIT_COMMIT_HASH"
+  echo ">>> Đang truy xuất thông tin phiên bản API của nguồn cấp dữ liệu..."
   for i in {1..3}; do
       KSU_API_VERSION=$(curl -s "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/builtin/kernel/Kbuild" | \
           grep -m1 "KSU_VERSION_API :=" | \
           awk -F'= ' '{print $2}' | \
           tr -d '[:space:]')
       if [ -n "$KSU_API_VERSION" ]; then
-          echo "成功获取 API 版本: $KSU_API_VERSION"
+          echo "Đã lấy thành công phiên bản API: $KSU_API_VERSION"
           break
       else
-          echo "获取失败，重试中 ($i/3)..."
+          echo "Không thể truy xuất, đang thử lại ($i/3)..."
           sleep 1
       fi
   done
   if [ -z "$KSU_API_VERSION" ]; then
-      echo -e "无法获取 API 版本，使用默认值 3.1.7..."
+      echo -e "Không thể truy xuất phiên bản API, đang sử dụng giá trị mặc định 3.1.7..."
       KSU_API_VERSION="3.1.7"
   fi
   export KSU_API_VERSION=$KSU_API_VERSION
 
   VERSION_DEFINITIONS=$'define get_ksu_version_full\nv\\$1-'"$GIT_COMMIT_HASH"$'@cctv18\nendef\n\nKSU_VERSION_API := '"$KSU_API_VERSION"$'\nKSU_VERSION_FULL := v'"$KSU_API_VERSION"$'-'"$GIT_COMMIT_HASH"$'@cctv18'
 
-  echo ">>> 正在修改 kernel/Kbuild 文件..."
+  echo ">>> Đang sửa đổi tệp kernel/Kbuild..."
   sed -i '/define get_ksu_version_full/,/endef/d' kernel/Kbuild
   sed -i '/KSU_VERSION_API :=/d' kernel/Kbuild
   sed -i '/KSU_VERSION_FULL :=/d' kernel/Kbuild
@@ -155,15 +153,15 @@ if [[ "$KSU_BRANCH" == "y" || "$KSU_BRANCH" == "Y" ]]; then
   ' kernel/Kbuild > kernel/Kbuild.tmp && mv kernel/Kbuild.tmp kernel/Kbuild
 
   KSU_VERSION_CODE=$(expr $(git rev-list --count main 2>/dev/null) + 37185 2>/dev/null || echo 114514)
-  echo ">>> 修改完成！验证结果："
+  echo ">>> Quá trình sửa đổi hoàn tất! Kết quả xác minh:"
   echo "------------------------------------------------"
   grep -A10 "REPO_OWNER" kernel/Kbuild | head -n 10
   echo "------------------------------------------------"
   grep "KSU_VERSION_FULL" kernel/Kbuild
-  echo ">>> 最终版本字符串: v${KSU_API_VERSION}-${GIT_COMMIT_HASH}@cctv18"
+  echo ">>> Chuỗi phiên bản cuối cùng: v${KSU_API_VERSION}-${GIT_COMMIT_HASH}@cctv18"
   echo ">>> Version Code: ${KSU_VERSION_CODE}"
 elif [[ "$KSU_BRANCH" == "r" || "$KSU_BRANCH" == "R" ]]; then
-  echo ">>> 拉取 ReSukiSU 并设置版本..."
+  echo ">>> Truy xuất ReSukiSU và thiết lập phiên bản..."
   curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash -s main
   echo 'CONFIG_KSU_FULL_NAME_FORMAT="%TAG_NAME%-%COMMIT_SHA%@cctv18"' >> ./common/arch/arm64/configs/gki_defconfig
 elif [[ "$KSU_BRANCH" == "n" || "$KSU_BRANCH" == "N" ]]; then

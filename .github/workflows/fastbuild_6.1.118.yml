@@ -783,37 +783,36 @@ jobs:
         run: |
           cat << 'EOF' > release_notes.md
           ### 📱 欧加真 ${{ env.KSU_TYPENAME }} SM8650 通用内核 | 构建信息
-          - 内核版本号: ${{ env.FULL_VERSION }}
-          - 编译时间: ${{ env.TIME_FORM }}
-          - 机型：欧加真骁龙8Gen3通用 ${{ env.KERNEL_VERSION }}.${{ env.SUB_VERSION }} 内核（基于一加12 ${{ env.KERNEL_VERSION }}.${{ env.SUB_VERSION }} 版官方OKI源码）
-          - KSU分支：${{ env.KSU_TYPENAME }}
-          - susfs支持：${{ github.event.inputs.susfs_enable }}
-          - KPM支持 ：${{ github.event.inputs.kpm_enable }}
-          - LZ4支持：${{ github.event.inputs.lz4_enable }}
-          - LZ4KD支持：${{ github.event.inputs.lz4kd_enable }}
-          - 网络功能增强：${{ github.event.inputs.better_net }}
-          - BBR/Brutal 等拥塞控制算法支持：${{ github.event.inputs.bbr_enable }}
-          - 三星SSG IO调度器支持：${{ github.event.inputs.ssg_enable }}
+          - Phiên bản Kernel: ${{ env.FULL_VERSION }}
+          - Thời gian tạo: ${{ env.TIME_FORM }}
+          - Thiết bị: Oppo + Oneplus + Realme Chip SM8650 ${{ env.KERNEL_VERSION }}.${{ env.SUB_VERSION }} 内核（基于一加12 ${{ env.KERNEL_VERSION }}.${{ env.SUB_VERSION }} 版官方OKI源码）
+          - Phiên bản KSU：${{ env.KSU_TYPENAME }}
+          - Phiên bản SUSFS：${{ github.event.inputs.susfs_enable }}
+          - Hỗ trợ KPM ：${{ github.event.inputs.kpm_enable }}
+          - Hỗ trợ LZ4：${{ github.event.inputs.lz4_enable }}
+          - Hỗ trợ LZ4KD：${{ github.event.inputs.lz4kd_enable }}
+          - Tăng cường chức năng mạng：${{ github.event.inputs.better_net }}
+          - BBR/Brutal ：${{ github.event.inputs.bbr_enable }}
+          - SSG IO：${{ github.event.inputs.ssg_enable }}
           - Re-Kernel支持：${{ github.event.inputs.rekernel_enable }}
-          - 内核级基带保护支持：${{ github.event.inputs.baseband_guard }}
-          - ReSukiSU管理器下载：[ReSukiSU_CI](https://github.com/cctv18/ReSukiSU_CI/releases)
-          - SukiSU Ultra管理器下载：[SukiSU-Ultra](https://github.com/SukiSU-Ultra/SukiSU-Ultra/releases)
-          - KernelSU Next管理器下载：[KernelSU-Next](https://github.com/KernelSU-Next/KernelSU-Next/releases)
-          - KSU原版管理器下载：[KernelSU](https://github.com/tiann/KernelSU/releases)
+          - BBG：${{ github.event.inputs.baseband_guard }}
+          - Tải xuống ReSukiSU Manager: [ReSukiSU_CI](https://github.com/p0s3id0nVN/ReSukiSU_CI/releases)
+          - Tải xuống SukiSU Ultra Manager: [SukiSU-Ultra](https://github.com/SukiSU-Ultra/SukiSU-Ultra/releases)
+          - Tải xuống KernelSU Next Manager: [KernelSU-Next](https://github.com/KernelSU-Next/KernelSU-Next/releases)
+          - Tải xuống Trình quản lý KSU gốc: [KernelSU](https://github.com/tiann/KernelSU/releases)
+          #### ⏫️ Cập nhật:
+          - Cập nhật{{ env.KSU_TYPENAME }}lên phiên bản mới nhất（${{ needs.build.outputs.ksuver }}）
+          - (Private)
           
-          ### ⏫️ 更新内容：
-          - 更新${{ env.KSU_TYPENAME }}至最新版本（${{ needs.build.outputs.ksuver }}）
-          - (预留)
+          ### 📋 Phương pháp cài đặt | Installation Guide
+          1. Nếu điện thoại của bạn đã cài đặt sẵn phần mềm phục hồi của bên thứ ba (như TWRP), bạn có thể tải xuống ROM AnyKernel dành riêng cho kiểu máy của mình, vào chế độ Recovery, flash ROM thông qua Recovery, rồi khởi động lại thiết bị.
+          2. Nếu điện thoại của bạn đã được root, bạn có thể cài đặt [HorizonKernelFlasher](https://github.com/libxzr/HorizonKernelFlasher/releases), flash ROM AnyKernel bằng HorizonKernelFlasher, rồi khởi động lại.
+          3. Nếu trước đây bạn đã cài đặt kernel SukiSU Ultra và SukiSU Ultra Manager đã được cập nhật lên phiên bản mới nhất, bạn có thể trực tiếp cài đặt gói ROM AnyKernel và khởi động lại trong SukiSU Ultra Manager;
+          4. Nếu bạn đã cài đặt kernel có vá lỗi lz4kd trước khi cài đặt kernel không có vá lỗi lz4kd, vui lòng tắt mô-đun zram để tránh lỗi;
+          5. Do những cập nhật về chức năng metamodule ở nhánh chính của KernelSU, phiên bản mới nhất của KSU Manager (bao gồm tất cả các nhánh ngoại trừ KernelSU Next) yêu cầu metamodule để gắn kết các module một cách chính xác. Các metamodule hiện tại bao gồm [meta overlayfs](https://github.com/KernelSU-Modules-Repo/meta-overlayfs), [mountify](https://github.com/backslashxx/mountify), [meta magicmount](https://github.com/7a72/meta-magic_mount/), [meta magicmount rs](https://github.com/Tools-cx-app/meta-magic_mount/), và [hybrid mount](https://github.com/YuzakiKokuban/meta-hybrid_mount), v.v. Nếu đây là lần đầu tiên bạn sử dụng KSU hoặc bạn vừa nâng cấp từ phiên bản KSU Manager cũ lên phiên bản mới hơn, vui lòng cài đặt một metamodule trước. Điều này sẽ cho phép các module khác liên quan đến việc gắn kết hệ thống hoạt động chính xác.
+          6. KernelPatch Next (KPN) là một triển khai KPM độc lập với KSU. Nó có thể chạy trong bất kỳ môi trường KSU/mask nào (nhưng không phải Apatch), và không thể được sử dụng cùng với chức năng kpm được tích hợp sẵn trong (Re)SukiSU. Trước khi sử dụng, vui lòng đảm bảo rằng kernel của bạn không có triển khai/bản vá kpm tích hợp sẵn.
           
-          ### 📋 安装方法 | Installation Guide
-          1. 若你的手机已经安装了第三方Recovery（如TWRP)，可下载对应机型的AnyKernel刷机包后进入Recovery模式，通过Recovery刷入刷机包后重启设备；
-          2. 若你的手机之前已有 root 权限，可在手机上安装[HorizonKernelFlasher](https://github.com/libxzr/HorizonKernelFlasher/releases)，在HorizonKernelFlasher中刷入AnyKernel刷机包并重启；
-          3. 若你之前已刷入SukiSU Ultra内核，且SukiSU Ultra管理器已更新至最新版本，可在SukiSU Ultra管理器中直接刷入AnyKernel刷机包并重启；
-          4. 刷入无lz4kd补丁版的内核前若刷入过lz4kd补丁版的内核，为避免出错，请先关闭zram模块；
-          5. 由于KernelSU上游更新了元模块功能，最新版KSU管理器（包括除KernelSU Next以外的各分支）需要配合元模块(metamodule)才能正常挂载模块。目前的元模块包括[meta overlayfs](https://github.com/KernelSU-Modules-Repo/meta-overlayfs), [mountify](https://github.com/backslashxx/mountify), [meta magicmount](https://github.com/7a72/meta-magic_mount/), [meta magicmount rs](https://github.com/Tools-cx-app/meta-magic_mount/), [hybrid mount](https://github.com/YuzakiKokuban/meta-hybrid_mount)等。若你是第一次使用KSU或刚从旧版KSU管理器升级至新版，请先安装一个元模块，这样其他涉及系统挂载的模块才能正常运行；
-          6. KernelPatch Next（即KPN）是一个独立于KSU的KPM实现，可以运行在任意KSU/面具环境中（不适用于Apatch），且不能与(Re)SukiSU内置的kpm功能共同使用，使用前请保证你的内核没有内置的kpm实现/修补。
-          
-          #### ※※※刷写内核有风险，为防止出现意外导致手机变砖，在刷入内核前请务必用[KernelFlasher](https://github.com/capntrips/KernelFlasher)等软件备份boot等关键启动分区!※※※
+          #### ※※※ Việc cài đặt lại kernel tiềm ẩn rủi ro. Để tránh các sự cố không mong muốn có thể làm hỏng điện thoại của bạn, vui lòng đảm bảo bạn sử dụng phần mềm phù hợp trước khi cài đặt lại kernel.[KernelFlasher](https://github.com/capntrips/KernelFlasher)Hãy đợi quá trình sao lưu phần mềm các phân vùng khởi động quan trọng, chẳng hạn như ổ đĩa khởi động! ※※※
           EOF
 
           gh release create "${{ env.TAG_HEAD }}-${{ env.TIME }}" \
