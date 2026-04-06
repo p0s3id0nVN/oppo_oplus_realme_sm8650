@@ -1,18 +1,17 @@
-name: 6.1.118 欧加真OKI内核快速构建
-
+name: Xây dựng Kernel OKI 6.1.118
 env:
-  TZ: Asia/Shanghai
+  TZ: Asia/Ho_Chi_Minh
   ANDROID_VERSION: 'android14'
   KERNEL_VERSION: '6.1'
   SUB_VERSION: '118'
-  KERNEL_NAME: 'android14-11-o-gca13bffobf09'
+  KERNEL_NAME: 'android14-11-o-p0s3id0n'
   CCACHE_KEY: ccache-neov4-6.1.118
 
 on:
   workflow_dispatch:
     inputs:
       ksu_type:
-        description: 'KernelSU分支(ReSukiSU/SukiSU Ultra/KernelSU Next/KSU(原版)/无内置KSU,默认ReSukiSU)'
+        description: 'Các nhánh KernelSU (ReSukiSU/SukiSU Ultra/KernelSU Next/KSU (bản gốc)/Không có KSU tích hợp, mặc định là ReSukiSU)'
         required: true
         type: choice
         default: 'resukisu'
@@ -23,12 +22,12 @@ on:
           - 'ksu'
           - 'none'
       susfs_enable:
-        description: '是否开启susfs(用于增强隐藏环境挂载功能; 可能轻微增加耗电，上游更新导致不稳定时或不需要可关闭)'
+        description: 'Bật susfs (để tăng cường chức năng gắn kết của các môi trường ẩn; có thể làm tăng nhẹ mức tiêu thụ điện năng; có thể tắt nếu các bản cập nhật từ nguồn gốc gây ra sự không ổn định hoặc nếu không cần thiết).'
         required: true
         type: boolean
         default: 'true'
       kpm_enable:
-        description: '是否开启kpm(builtin-使用(re)sukisu内置kpm, kpn-使用独立kpm实现(支持任意KSU/面具环境); 不需要可保持默认关闭)'
+        description: 'Bật kpm (builtin - sử dụng kpm tích hợp sẵn trong (re)sukisu, kpn - sử dụng triển khai kpm độc lập (hỗ trợ bất kỳ môi trường KSU/Mask nào); có thể để tắt theo mặc định nếu không cần).'
         required: true
         type: choice
         default: 'false'
@@ -37,17 +36,17 @@ on:
           - 'builtin'
           - 'kpn'
       lz4_enable:
-        description: '是否安装 lz4 1.10.0+zstd 1.5.7 补丁'
+        description: 'Cài đặt bản vá LZ4 1.10.0 + ZSTD 1.5.7 và bản vá LZ4KD'
         required: true
         type: boolean
         default: 'true'
       lz4kd_enable:
-        description: '是否安装 LZ4KD 补丁(若已开启lz4+zstd补丁则可不开启)'
+        description: 'Cài đặt bản vá LZ4KD? (Nếu bản vá LZ4+ZSTD đã được kích hoạt, bước này không cần thiết.)'
         required: true
         type: boolean
         default: 'false'
       bbr_enable:
-        description: '是否启用bbr算法(优化上行数据,对手机日用无太大意义甚至可能负优化;false关闭,true仅加入算法,default设为默认)'
+        description: 'Bật hoặc tắt thuật toán BBR (tối ưu hóa dữ liệu đường lên, nhưng ít mang lại lợi ích thiết thực cho việc sử dụng điện thoại di động hàng ngày và thậm chí có thể gây ra hiện tượng tối ưu hóa ngược; false sẽ tắt nó, true chỉ thêm thuật toán, default đặt nó làm mặc định).'
         required: true
         type: choice
         default: 'false'
@@ -56,37 +55,37 @@ on:
           - 'true'
           - 'default'
       better_net:
-        description: '是否开启网络功能拓展配置(用于为ipset及需要iptables等高级网络功能内核支持的程序提供支持)'
+        description: 'Bật tắt chức năng mạng (được sử dụng để hỗ trợ ipset và các chương trình yêu cầu hỗ trợ nhân hệ điều hành cho các chức năng mạng nâng cao như iptables).'
         required: true
         type: boolean
         default: 'false'
       ssg_enable:
-        description: '是否启用三星SSG IO调度器支持(提升IO读写性能; 在一加12上可能导致bug)'
+        description: 'Bật tắt SSG IO (cải thiện hiệu suất đọc/ghi IO; có thể gây ra lỗi trên Find X7U & OP 12).''
         required: true
         type: boolean
         default: 'true'
       rekernel_enable:
-        description: '是否启用Re-Kernel支持(与Freezer/NoActive等软件配合, 提升应用冻结能力)'
+        description: 'Kích hoạt hỗ trợ Re-Kernel (để hoạt động với các phần mềm như Freezer/NoActive nhằm cải thiện khả năng đóng băng ứng dụng).'
         required: true
         type: boolean
         default: 'false'
       baseband_guard:
-        description: '是否开启内核级基带保护(阻止一切对非用户分区的写入，有效防止格机)'
+        description: 'Kích hoạt tính năng bảo vệ băng tần cơ sở ở cấp độ nhân hệ điều hành (ngăn chặn mọi thao tác ghi vào các phân vùng không phải của người dùng, từ đó ngăn chặn việc định dạng hệ thống).'
         required: true
         type: boolean
         default: 'true'
       ccache_update:
-        description: '更新ccache缓存(将本次编译生成的ccache缓存覆盖至仓库缓存，在更改编译配置、源码或需要刷新缓存时开启)'
+        description: 'Cập nhật bộ nhớ cache ccache (thao tác này sẽ ghi đè bộ nhớ cache ccache được tạo trong quá trình biên dịch này bằng bộ nhớ cache của kho lưu trữ; hãy bật tùy chọn này khi bạn thay đổi cấu hình biên dịch, mã nguồn hoặc cần làm mới bộ nhớ cache).'
         required: true
         type: boolean
         default: 'false'
       ccache_debug:
-        description: '是否上传 Ccache调试日志(用于调试, 无需要不必开启)'
+        description: 'Tải lên nhật ký gỡ lỗi Ccache (cho mục đích gỡ lỗi; không cần bật tùy chọn này).'
         required: true
         type: boolean
         default: 'false'
       kernel_suffix:
-        description: '内核后缀(留空默认,开头别加连字符,勿加空格等影响指令运行的保留字符)'
+        description: 'Hậu tố Kernel (để trống để sử dụng mặc định, không thêm dấu gạch ngang, khoảng trắng hoặc các ký tự dành riêng khác có thể ảnh hưởng đến việc thực thi lệnh)'
         required: false
         type: string
         default: ''
@@ -101,13 +100,13 @@ jobs:
       actions: write
       contents: read
     steps:
-      - name: 安装环境依赖+初始化源码仓库及llvm-Clang20工具链
+      - name: 🔍Cài đặt các phụ thuộc môi trường và khởi tạo kho mã nguồn cũng như bộ công cụ llvm-Clang20.
         run: |
           rm -rf kernel_workspace
           mkdir kernel_workspace
           cd kernel_workspace
-          echo "当前仓库：$GITHUB_REPOSITORY"
-          echo "当前分支：$GITHUB_REF_NAME"
+          echo "Kho lưu trữ hiện tại：$GITHUB_REPOSITORY"
+          echo "Nhánh hiện tại：$GITHUB_REF_NAME"
           
           sudo apt-mark hold firefox &&
           sudo apt-mark hold libc-bin &&
@@ -115,16 +114,16 @@ jobs:
           sudo rm -rf /var/lib/man-db/auto-update &&
           sudo apt update &&
           sudo apt-get install -y --no-install-recommends binutils python-is-python3 libssl-dev libelf-dev ccache &
-          #旧版完整指令：（由于经过验证大部分指令已内置于GitHub Action环境中，故进行精简）
+          #Các lệnh đầy đủ của phiên bản cũ: (Vì hầu hết các lệnh đã được xác minh là tích hợp sẵn trong môi trường GitHub Actions, nên chúng đã được đơn giản hóa)
           #sudo apt-get install -y --no-install-recommends curl bison flex make binutils git perl gcc python3 python-is-python3 bc libssl-dev libelf-dev zip unzip ccache
           
-          echo "正在克隆源码仓库..."
+          echo "Sao chép kho mã nguồn..."
           aria2c -s16 -x16 -k1M https://github.com/cctv18/android_kernel_common_oneplus_sm8650/archive/refs/heads/oneplus/sm8650_b_16.0.0_oneplus12.zip -o common.zip && 
           unzip -q common.zip && 
           mv "android_kernel_common_oneplus_sm8650-oneplus-sm8650_b_16.0.0_oneplus12" common &&
           rm -rf common.zip &
           
-          echo "正在克隆llvm-Clang20工具链..." &&
+          echo "Sao chép bộ công cụ llvm-Clang20..." &&
           mkdir -p clang20 &&
           aria2c -s16 -x16 -k1M https://github.com/cctv18/oneplus_sm8650_toolchain/releases/download/LLVM-Clang20-r547379/clang-r547379.zip -o clang.zip &&
           unzip -q clang.zip -d clang20 &&
@@ -136,23 +135,23 @@ jobs:
           rm -rf build-tools.zip &
           
           wait
-          echo "所有源码及llvm-Clang20工具链初始化完成！"
-          echo "正在去除 ABI 保护 & 去除 dirty 后缀..."
+          echo "Quá trình khởi tạo toàn bộ mã nguồn và chuỗi công cụ llvm-Clang20 đã hoàn tất!"
+          echo "Đang gỡ bỏ bảo vệ ABI và gỡ bỏ hậu tố thay đổi..."
           rm common/android/abi_gki_protected_exports_* || true
           for f in common/scripts/setlocalversion; do
             sed -i 's/ -dirty//g' "$f"
             sed -i '$i res=$(echo "$res" | sed '\''s/-dirty//g'\'')' "$f"
           done
 
-      - name: 配置ccache目录
+      - name: 🎯Cấu hình thư mục Ccache
         run: |
           echo "CCACHE_DIR=$HOME/.ccache_${{ env.KERNEL_VERSION }}.${{ env.SUB_VERSION }}" >> $GITHUB_ENV
           echo "CCACHE_MAXSIZE=3G" >> $GITHUB_ENV
           echo "当前磁盘空间："
           df -h
-          echo "当前构建内核版本：${{ env.KERNEL_VERSION }}.${{ env.SUB_VERSION }}"
+          echo "Phiên bản hạt nhân hiện tại:${{ env.KERNEL_VERSION }}.${{ env.SUB_VERSION }}"
 
-      - name: 载入当前版本内核的 ccache缓存
+      - name: 📦Tải bộ nhớ cache Ccache của phiên bản kernel hiện tại.
         uses: actions/cache@v5
         id: ccache-restore
         with:
@@ -162,43 +161,43 @@ jobs:
             ${{ env.CCACHE_KEY }}-${{ runner.os }}-
             ${{ env.CCACHE_KEY }}-
 
-      - name: 拉取公共预置 ccache 缓存
+      - name: 📦Tải bộ nhớ cache Ccache mặc định công khai
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "检查本地缓存状态..."
+          echo "Kiểm tra trạng thái bộ đệm cục bộ..."
           if [ -d "${{ env.CCACHE_DIR }}" ] && [ "$(ls -A ${{ env.CCACHE_DIR }} 2>/dev/null)" ]; then
-            echo "检测到本地已成功载入 ccache 缓存，跳过公共 ccache 拉取！"
+            echo "Bộ nhớ cache ccache cục bộ đã được tải thành công, bỏ qua bước tải bộ nhớ cache ccache công khai!"
             exit 0
           fi
           
-          echo "未命中缓存，尝试拉取最新公共 ccache ..."
+          echo "Không tìm thấy bộ nhớ cache, đang cố gắng tải phiên bản ccache công khai mới nhất... "
           mkdir -p ${{ env.CCACHE_DIR }}
           FILE_NAME="ccache-${{ env.KERNEL_VERSION }}.${{ env.SUB_VERSION }}.tar.zst"
           
           if gh release download -p "$FILE_NAME" -R cctv18/public_ccache; then
-            echo "成功下载 $FILE_NAME，正在解压..."
+            echo "Đã tải xuống thành công $FILE_NAME, đang giải nén..."
             tar -I zstd -xf "$FILE_NAME" -C ${{ env.CCACHE_DIR }}
-            echo "公共 ccache 恢复完成！"
+            echo "Khôi phục ccache công khai đã hoàn tất!"
           else
-            echo "公共 ccache 中未找到对应的 ccache 文件，将进行全量全新编译..."
+            echo "Tệp ccache tương ứng không được tìm thấy trong kho lưu trữ ccache công khai, do đó quá trình biên dịch lại toàn bộ sẽ được thực hiện...."
           fi
 
-      - name: 清除旧 ccache 缓存
+      - name: 🧹Xóa bộ nhớ cache Ccache cũ
         if: inputs.ccache_update
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "正在清除仓库中的旧 ccache 缓存..."
+          echo "Xóa bộ nhớ cache ccache cũ khỏi kho lưu trữ..."
           if gh cache delete ${{ env.CCACHE_KEY }}-${{ runner.os }}-${{ github.ref_name }} -R ${{ github.repository }}; then
-            echo "成功删除旧的 ccache 缓存！"
+            echo "Đã xóa thành công bộ nhớ cache ccache cũ!"
           else
-            echo "旧缓存不存在或已被清理！"
+            echo "Bộ nhớ cache cũ không tồn tại hoặc đã bị xóa!"
           fi
       
-      - name: 初始化并配置ccache
+      - name: ♻️Khởi tạo và cấu hình ccache
         run: |
-          # 设置ccache环境变量
+          # Thiết lập các biến môi trường ccache
           export CCACHE_COMPILERCHECK="none"
           export CCACHE_BASEDIR="${{ github.workspace }}"
           export CCACHE_NOHASHDIR="true"
@@ -206,97 +205,97 @@ jobs:
           export CCACHE_DIR="${{ env.CCACHE_DIR }}"
           export CCACHE_MAXSIZE="${{ env.CCACHE_MAXSIZE }}"
           
-          # 确保ccache目录存在
+          # Đảm bảo thư mục ccache tồn tại.
           mkdir -p "$CCACHE_DIR"
           
-          # 每次运行都重新配置缓存大小
-          echo "配置ccache缓存大小为: $CCACHE_MAXSIZE"
+          # Cấu hình lại kích thước bộ nhớ cache trong mỗi lần chạy.
+          echo "Cấu hình kích thước bộ nhớ cache ccache thành: $CCACHE_MAXSIZE"
           ccache -M "$CCACHE_MAXSIZE"
           ccache -o compression=true
           
-          # 显示初始缓存状态
-          echo "ccache初始状态:"
+          # Hiển thị trạng thái bộ đệm ban đầu
+          echo "Trạng thái ban đầu của ccache:"
           ccache -s
           
-          # 如果缓存恢复命中，显示详细信息
+          # Nếu bộ nhớ đệm được khôi phục và tìm thấy kết quả phù hợp, hãy hiển thị thông tin chi tiết.
           if [ "${{ steps.ccache-restore.outputs.cache-hit }}" == 'true' ]; then
-            echo "ccache缓存命中详情:"
+            echo "Chi tiết truy cập bộ nhớ cache ccache:"
             ccache -sv
           fi
 
-      - name: 添加KernelSU
+      - - name: 🔀Thêm KernelSU
         id: ksu_version
         run: |
-          # 进入内核工作目录
+          # Vào thư mục làm việc của nhân hệ điều hành
           cd kernel_workspace
           if [[ ${{ github.event.inputs.ksu_type }} == "sukisu" ]]; then
-            echo "正在配置SukiSU Ultra..."
+            echo "Cấu hình SukiSU Ultra..."
             curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/refs/heads/main/kernel/setup.sh" | bash -s builtin
             cd ./KernelSU
-            # 获取当前 Git 提交的短哈希 (8位)
+            # Lấy mã hash (8 ký tự) của commit Git hiện tại
             GIT_COMMIT_HASH=$(git rev-parse --short=8 HEAD)
             echo "当前提交哈希: $GIT_COMMIT_HASH"
             export KSU_VERSION=$KSU_VERSION
-            # 尝试最多 3 次获取 KernelSU API 版本号
+            # Thử truy xuất số phiên bản API KernelSU tối đa 3 lần
             for i in {1..3}; do
-              # 从远程 Makefile 中提取 KSU_API_VERSION
+              # Trích xuất KSU_API_VERSION từ Kbuild
               KSU_API_VERSION=$(curl -s "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/builtin/kernel/Makefile" | 
-                # 查找第一个包含版本定义的行
+                # Tìm dòng đầu tiên chứa định nghĩa phiên bản
                 grep -m1 "KSU_VERSION_API :=" | 
-                # 提取等号后的值
+                # Trích xuất giá trị sau dấu bằng
                 awk -F'= ' '{print $2}' | 
-                # 删除所有空白字符
+                # Loại bỏ tất cả các ký tự khoảng trắng
                 tr -d '[:space:]')
-              # 如果成功获取到版本号则跳出循环，否则等待 1 秒后重试
+              # Nếu lấy được số phiên bản thành công, sẽ thoát khỏi vòng lặp; nếu không, sẽ đợi 1 giây và thử lại.
               [ -n "$KSU_API_VERSION" ] && break || sleep 1
             done
-            # 如果获取失败，使用默认版本号 3.1.7
+            # Nếu quá trình truy xuất thất bại, hãy sử dụng số phiên bản mặc định là 3.1.7
             [ -z "$KSU_API_VERSION" ] && KSU_API_VERSION="3.1.7"
-            # 将 API 版本号存储到 GitHub 环境变量
+            # Lưu số phiên bản API vào biến môi trường GitHub
             echo "KSU_API_VERSION=$KSU_API_VERSION" >> $GITHUB_ENV
-            # 创建版本定义模板&版本格式函数: 使用获取的提交哈希和固定后缀
-            # KSU_VERSION_API: API 版本定义
-            # KSU_VERSION_FULL: 完整版本定义
+            # Tạo mẫu định nghĩa phiên bản và hàm định dạng phiên bản: sử dụng mã băm commit đã truy xuất và hậu tố cố định
+            # KSU_VERSION_API: Định nghĩa phiên bản API
+            # KSU_VERSION_FULL: Định nghĩa phiên bản đầy đủ
             VERSION_DEFINITIONS=$'define get_ksu_version_full\nv\\$1-'"$GIT_COMMIT_HASH"$'@cctv18\nendef\n\nKSU_VERSION_API := '"$KSU_API_VERSION"$'\nKSU_VERSION_FULL := v'"$KSU_API_VERSION"$'-'"$GIT_COMMIT_HASH"$'@cctv18'
-            # 清理内核 Makefile 中的旧版本定义
-            # 删除版本函数
+            # Dọn dẹp các định nghĩa phiên bản cũ trong kernel Kbuild
+            # Xóa các hàm phiên bản
             sed -i '/define get_ksu_version_full/,/endef/d' kernel/Makefile
-            # 删除 API 版本定义
+            # Xóa định nghĩa phiên bản API
             sed -i '/KSU_VERSION_API :=/d' kernel/Makefile
-            # 删除完整版本定义
+            # Xóa định nghĩa phiên bản đầy đủ
             sed -i '/KSU_VERSION_FULL :=/d' kernel/Makefile
-            # 在 REPO_OWNER 行后插入新版本定义
+            # Chèn định nghĩa phiên bản mới sau dòng REPO_OWNER
             awk -v def="$VERSION_DEFINITIONS" '
-              # 当找到 REPO_OWNER 行时，插入版本定义并设置标记
+              # Khi tìm thấy dòng REPO_OWNER, hãy chèn định nghĩa phiên bản và đặt cờ.
               /REPO_OWNER :=/ {print; print def; inserted=1; next}
-              # 打印所有行
+              # In tất cả các dòng
               1
-              # 如果未找到插入点，在文件末尾追加
+              # Nếu không tìm thấy điểm chèn, hãy thêm vào cuối tệp
               END {if (!inserted) print def}
             ' kernel/Makefile > kernel/Makefile.tmp && mv kernel/Makefile.tmp kernel/Makefile
 
-            # 生成自定义版本号（基于提交计数）, 失败时使用 114514
+            # Tạo số phiên bản tùy chỉnh (dựa trên số lần commit), sử dụng 114514 nếu không thành công.
             KSU_VERSION=$(expr $(git rev-list --count main) + 37185 2>/dev/null || echo 114514)
-            # 存储版本号到 GitHub 环境变量
+            # Lưu số phiên bản vào biến môi trường GitHub
             echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
             echo "ksuver=$KSU_VERSION" >> $GITHUB_OUTPUT
 
-            # 验证修改结果
-            grep -A10 "REPO_OWNER" kernel/Makefile  # 检查插入点后的内容
-            grep "KSU_VERSION_FULL" kernel/Makefile # 确认版本定义存在
-            echo "SukiSU版本号: v${KSU_API_VERSION}-${GIT_COMMIT_HASH}@cctv18"
+            # Xác minh kết quả chỉnh sửa
+            grep -A10 "REPO_OWNER" kernel/Kbuild # Kiểm tra nội dung sau điểm chèn
+            grep "KSU_VERSION_FULL" kernel/Kbuild # Xác nhận định nghĩa phiên bản tồn tại
+            echo "Số phiên bản SukiSU: v${KSU_API_VERSION}-${GIT_COMMIT_HASH}@psd"
           elif [[ ${{ github.event.inputs.ksu_type }} == "resukisu" ]]; then
-            echo "正在配置ReSukiSU..."
+            echo "Đang cấu hình ReSukiSU..."
             curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/refs/heads/main/kernel/setup.sh" | bash -s main
             echo 'CONFIG_KSU_FULL_NAME_FORMAT="%TAG_NAME%-%COMMIT_SHA%@cctv18"' >> ./common/arch/arm64/configs/gki_defconfig
             cd ./KernelSU
-            # 生成自定义版本号（基于提交计数）, 失败时使用 114514
+            # Tạo số phiên bản tùy chỉnh (dựa trên số lần commit), sử dụng 114514 nếu không thành công.
             KSU_VERSION=$(expr $(git rev-list --count main) + 30700 2>/dev/null || echo 114514)
-            # 存储版本号到 GitHub 环境变量
+            # Lưu số phiên bản vào biến môi trường GitHub
             echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
             echo "ksuver=$KSU_VERSION" >> $GITHUB_OUTPUT
           elif [[ ${{ github.event.inputs.ksu_type }} == "ksunext" ]]; then
-            echo "正在配置KernelSU Next..."
+            echo "Đang cấu hình KernelSU Next..."
             curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/refs/heads/dev-susfs/kernel/setup.sh" | bash -s dev-susfs
             cd KernelSU-Next
             rm -rf .git
@@ -306,12 +305,12 @@ jobs:
             sed -i "s/KSU_VERSION_FALLBACK := 1/KSU_VERSION_FALLBACK := $KSU_VERSION/g" kernel/Kbuild
             KSU_GIT_TAG=$(curl -sL "https://api.github.com/repos/KernelSU-Next/KernelSU-Next/tags" | grep -o '"name": *"[^"]*"' | head -n 1 | sed 's/"name": "//;s/"//')
             sed -i "s/KSU_VERSION_TAG_FALLBACK := v0.0.1/KSU_VERSION_TAG_FALLBACK := $KSU_GIT_TAG/g" kernel/Kbuild
-            #为KernelSU Next添加WildKSU管理器支持
+            #Thêm hỗ trợ WildKSU Manager vào KernelSU Next
             cd ../common/drivers/kernelsu
             wget https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/other_patch/apk_sign.patch
             patch -p2 -N -F 3 < apk_sign.patch || true
           elif [[ ${{ github.event.inputs.ksu_type }} == "ksu" ]]; then
-            echo "正在配置原版 KernelSU (tiann/KernelSU)..."
+            echo "Đang cấu hình KernelSU gốc (tiann/KernelSU)..."
             curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/refs/heads/main/kernel/setup.sh" | bash -s main
             cd ./KernelSU
             KSU_VERSION=$(expr $(curl -sI "https://api.github.com/repos/tiann/KernelSU/commits?sha=main&per_page=1" | grep -i "link:" | sed -n 's/.*page=\([0-9]*\)>; rel="last".*/\1/p') "+" 30000)
@@ -319,15 +318,15 @@ jobs:
             echo "ksuver=$KSU_VERSION" >> $GITHUB_OUTPUT
             sed -i "s/DKSU_VERSION=16/DKSU_VERSION=${KSU_VERSION}/" kernel/Kbuild
           else
-            echo "已选择无内置KernelSU模式，跳过KernelSU配置..."
+            echo "Đã chọn chế độ không có KernelSU tích hợp sẵn, bỏ qua cấu hình KernelSU..."
           fi
 
-      - name: 应用 KernelSU & SUSFS 补丁
+      - name: 🔀Áp dụng các bản vá KernelSU & SUSFS
         if: inputs.susfs_enable
         run: |
           cd kernel_workspace
           if [[ ${{ github.event.inputs.ksu_type }} != "none" ]]; then
-            echo "正在添加susfs补丁..."
+            echo "--- Bắt đầu thêm bản vá SUSFS ---"
             git clone --depth=1 https://github.com/cctv18/susfs4oki.git susfs4ksu -b oki-${{ env.ANDROID_VERSION }}-${{ env.KERNEL_VERSION }}
             wget https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/other_patch/69_hide_stuff.patch -O ./common/69_hide_stuff.patch
             cp ./susfs4ksu/kernel_patches/50_add_susfs_in_gki-${{ env.ANDROID_VERSION }}-${{ env.KERNEL_VERSION }}.patch ./common/
@@ -338,19 +337,19 @@ jobs:
             patch -p1 -N -F 3 < 69_hide_stuff.patch || true
             cd ..
           else
-            echo "已选择无内置KernelSU模式，跳过susfs配置..."
+            echo "Đã chọn chế độ không có KernelSU tích hợp sẵn, bỏ qua cấu hình susfs..."
           fi
           if [[ ${{ github.event.inputs.ksu_type }} == "ksu" ]]; then
-            echo "正在为原版 KernelSU (tiann/KernelSU)添加补丁..."
+            echo "Thêm bản vá vào KernelSU gốc (tiann/KernelSU)..."
             cp ./susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./KernelSU/
             cd ./KernelSU
             patch -p1 < 10_enable_susfs_for_ksu.patch || true
           fi
           
-      - name: 应用lz4 1.10.0 & zstd 1.5.7补丁
+      - name: 🔀Áp dụng các bản vá lz4 1.10.0 & zstd 1.5.7
         if: inputs.lz4_enable
         run: |
-          echo "正在添加lz4 1.10.0 & zstd 1.5.7补丁…"
+          echo "Đang áp dụng các bản vá LZ4 và ZSTD từ kho lưu trữ..."
           cd kernel_workspace
           git clone --depth=1 https://github.com/$GITHUB_REPOSITORY.git -b $GITHUB_REF_NAME $GITHUB_ACTOR
           cp ./$GITHUB_ACTOR/zram_patch/001-lz4.patch ./common/
@@ -360,10 +359,10 @@ jobs:
           git apply -p1 < 001-lz4.patch || true
           patch -p1 < 002-zstd.patch || true
 
-      - name: 应用 lz4kd 补丁
+      - name: 🔀Áp dụng bản vá lz4kd
         if: inputs.lz4kd_enable
         run: |
-          echo "正在添加lz4kd补丁…"
+          echo "Thêm bản vá lz4kd…"
           cd kernel_workspace
           if [ ! -d "SukiSU_patch" ]; then
             git clone --depth=1 https://github.com/ShirkNeko/SukiSU_patch.git
@@ -375,7 +374,7 @@ jobs:
           cp ../SukiSU_patch/other/zram/zram_patch/${{ env.KERNEL_VERSION }}/lz4kd.patch ./
           patch -p1 -F 3 < lz4kd.patch || true
           
-      - name: 添加SUSFS 配置项
+      - name: 🎯Thêm mục cấu hình SUSFS
         if: inputs.susfs_enable
         run: |
           cd kernel_workspace
@@ -395,7 +394,7 @@ jobs:
           echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_KSU_SUSFS_SUS_MAP=y" >> ./common/arch/arm64/configs/gki_defconfig
           
-      - name: 添加 KSU & 其他配置项
+      - name: 🔀Thêm KSU và các mục cấu hình khác.
         run: |
           cd kernel_workspace
           echo "CONFIG_KSU=y" >> ./common/arch/arm64/configs/gki_defconfig
@@ -405,7 +404,7 @@ jobs:
           if [[ "${{ github.event.inputs.susfs_enable }}" == "false" ]]; then
             echo "CONFIG_KSU_SUSFS=n" >> ./common/arch/arm64/configs/gki_defconfig
           fi
-          #添加对 Mountify (backslashxx/mountify) 模块的支持
+          #Thêm hỗ trợ cho mô-đun Mountify (backslashxx/mountify)
           echo "CONFIG_TMPFS_XATTR=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_TMPFS_POSIX_ACL=y" >> ./common/arch/arm64/configs/gki_defconfig
           if [[ ${{ github.event.inputs.lz4kd_enable }} == 'true' ]]; then
@@ -415,23 +414,23 @@ jobs:
             echo "CONFIG_CRYPTO_LZ4KD=y" >> ./common/arch/arm64/configs/gki_defconfig
             echo "CONFIG_CRYPTO_842=y" >> ./common/arch/arm64/configs/gki_defconfig
           fi
-          # 开启O2编译优化配置
+          # Bật cấu hình tối ưu hóa biên dịch O2
           echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y" >> ./common/arch/arm64/configs/gki_defconfig
-          #禁用 defconfig 检查
+          #Vô hiệu hóa kiểm tra defconfig
           sed -i 's/check_defconfig//' ./common/build.config.gki
-          #跳过将uapi标准头安装到 usr/include 目录的不必要操作，节省编译时间
+          #Bỏ qua bước không cần thiết là cài đặt tiêu đề chuẩn UAPI vào thư mục usr/include, giúp tiết kiệm thời gian biên dịch.
           echo "CONFIG_HEADERS_INSTALL=n" >> ./common/arch/arm64/configs/gki_defconfig
           
-      - name: 启用网络功能增强优化配置
+      - name: 🔀Kích hoạt các chức năng nâng cao của mạng và tối ưu hóa cấu hình.
         if: inputs.better_net
         run: |
           cd kernel_workspace
-          #启用  BPF 流解析器,实现高性能网络流量处理,增强网络监控和分析能力
+          #Kích hoạt bộ giải quyết luồng BPF để đạt được khả năng xử lý lưu lượng mạng hiệu suất cao và nâng cao khả năng giám sát và phân tích mạng.
           echo "CONFIG_BPF_STREAM_PARSER=y" >> ./common/arch/arm64/configs/gki_defconfig
-          #开启增强 Netfilter 防火墙扩展模块,支持基于地址类型的匹配规则,启用 IP 集合支持,提高防火墙规则灵活性,支持更复杂的流量过滤策略
+          #Kích hoạt mô-đun mở rộng tường lửa Netfilter nâng cao để hỗ trợ các quy tắc khớp dựa trên loại địa chỉ, bật hỗ trợ thiết lập IP, cải thiện tính linh hoạt của quy tắc tường lửa và hỗ trợ các chính sách lọc lưu lượng phức tạp hơn.
           echo "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_NETFILTER_XT_SET=y" >> ./common/arch/arm64/configs/gki_defconfig
-          #启用 IP 集框架及其多种数据结构实现,提供高效的大规模 IP 地址管理,提高防火墙规则处理效率,减少内存占用
+          #Cho phép sử dụng khung thiết lập IP và các cấu trúc dữ liệu khác nhau của nó để quản lý địa chỉ IP quy mô lớn hiệu quả, cải thiện hiệu quả xử lý quy tắc tường lửa và giảm mức tiêu thụ bộ nhớ.
           echo "CONFIG_IP_SET=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_IP_SET_MAX=65534" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_IP_SET_BITMAP_IP=y" >> ./common/arch/arm64/configs/gki_defconfig
@@ -450,20 +449,20 @@ jobs:
           echo "CONFIG_IP_SET_HASH_NETPORT=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_IP_SET_HASH_NETIFACE=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_IP_SET_LIST_SET=y" >> ./common/arch/arm64/configs/gki_defconfig
-          #启用 IPv6 网络地址转换
+          # Bật tính năng dịch địa chỉ mạng IPv6
           echo "CONFIG_IP6_NF_NAT=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_IP6_NF_TARGET_MASQUERADE=y" >> ./common/arch/arm64/configs/gki_defconfig
-          #由于部分机型的vintf兼容性检测规则，在开启CONFIG_IP6_NF_NAT后开机会出现"您的设备内部出现了问题。请联系您的设备制造商了解详情。"的提示，故添加一个配置修复补丁，在编译内核时隐藏CONFIG_IP6_NF_NAT=y但不影响对应功能编译
+          #Do các quy tắc phát hiện khả năng tương thích VINTF trên một số thiết bị, việc bật CONFIG_IP6_NF_NAT sẽ dẫn đến thông báo "Có sự cố với thiết bị của bạn. Vui lòng liên hệ với nhà sản xuất thiết bị để biết chi tiết." khi khởi động. Do đó, một bản vá lỗi cấu hình đã được thêm vào để ẩn CONFIG_IP6_NF_NAT=y trong quá trình biên dịch kernel mà không ảnh hưởng đến việc biên dịch hàm tương ứng.
           cd common
           wget https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/other_patch/config.patch
           patch -p1 -F 3 < config.patch || true
 
-      - name: 添加 BBR 等一系列拥塞控制算法
+      - name: 🔀Thêm một loạt các thuật toán kiểm soát tắc nghẽn như BBR.
         run: |
           if [[ "${{ github.event.inputs.bbr_enable }}" != "false" ]]; then
-            echo "正在添加BBR等拥塞控制算法..."
+            echo "Thêm các thuật toán kiểm soát tắc nghẽn như BBR..."
             cd kernel_workspace
-            #开启TCP拥塞控制算法控制器（必需）
+            # Kích hoạt bộ điều khiển thuật toán kiểm soát tắc nghẽn TCP (bắt buộc)
             echo "CONFIG_TCP_CONG_ADVANCED=y" >> ./common/arch/arm64/configs/gki_defconfig
             ################################################################################################################################
             # BBR：基于链路容量的代表拥塞控制算法，不再使用丢包、延时等信号去衡量拥塞是否发生，而是直接对网络建模来应对、避免真实的网络拥塞；
@@ -491,55 +490,55 @@ jobs:
             #对每个 TCP 连接设置带宽参数之后才能正常工作，绝大部分安卓应用都不支持该操作，故请勿将 TCP Brutal 设置成默认拥塞控制算法。
             echo "CONFIG_TCP_CONG_BRUTAL=y" >> ./common/arch/arm64/configs/gki_defconfig
             if [[ "${{ github.event.inputs.bbr_enable }}" == "default" ]]; then
-              echo "正在将BBR设为默认拥塞控制算法..."
+              echo "Thiết lập BBR làm thuật toán kiểm soát tắc nghẽn mặc định..."
               echo "CONFIG_DEFAULT_TCP_CONG=bbr" >> ./common/arch/arm64/configs/gki_defconfig
             else
               echo "CONFIG_DEFAULT_TCP_CONG=cubic" >> ./common/arch/arm64/configs/gki_defconfig
             fi
           fi
 
-      - name: 启用三星SSG IO调度器
+      - name: - name: 📥Kích hoạt bộ lập lịch I/O SSG
         if: inputs.ssg_enable
         run: |
-          echo "正在启用三星SSG IO调度器(一加12等极少数机型开启后可能不开机,若出现bug请关闭此项)…"
+          Thông báo "Đang bật bộ lập lịch Samsung SSG IO (Điều này có thể khiến thiết bị không khởi động được trên một số ít mẫu máy, chẳng hạn như OnePlus 12. Nếu bạn gặp bất kỳ lỗi nào, vui lòng tắt tùy chọn này)..." cho biết bộ lập lịch Samsung SSG IO đang được bật.
           cd kernel_workspace
           echo "CONFIG_MQ_IOSCHED_SSG=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_MQ_IOSCHED_SSG_CGROUP=y" >> ./common/arch/arm64/configs/gki_defconfig
 
-      - name: 启用Re-Kernel支持
+      - name: 🎯Kích hoạt hỗ trợ Re-Kernel
         if: inputs.rekernel_enable
         run: |
-          echo "正在启用Re-Kernel支持(用于与Freezer,NoActive等软件配合使用,提升冻结后台能力)…"
+          echo "Bật hỗ trợ Re-Kernel (để sử dụng với các phần mềm như Freezer và NoActive nhằm cải thiện khả năng đóng băng các tiến trình nền)..." 
           cd kernel_workspace
           echo "CONFIG_REKERNEL=y" >> ./common/arch/arm64/configs/gki_defconfig
 
-      - name: 启用内核级基带保护
+      - name: 🎯Kích hoạt tính năng bảo vệ băng tần cơ sở ở cấp độ nhân hệ điều hành.
         if: inputs.baseband_guard
         run: |
-          echo "正在启用启用内核级基带保护支持…"
+          echo "Kích hoạt hỗ trợ bảo vệ băng tần cơ sở ở cấp nhân hệ điều hành.…"
           cd kernel_workspace
           echo "CONFIG_BBG=y" >> ./common/arch/arm64/configs/gki_defconfig
           cd ./common
           curl -sSL https://github.com/cctv18/Baseband-guard/raw/master/setup.sh | bash
           sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' security/Kconfig
 
-      - name: 添加制作名称
+      - Tên: Thêm tên vào quá trình tạo
         run: |
           cd kernel_workspace
-          echo "替换内核版本后缀..."
+          echo "Thay thế hậu tố phiên bản kernel..."
           if [[ -n "${{ github.event.inputs.kernel_suffix }}" ]]; then
-            echo "当前内核版本后缀：${{ github.event.inputs.kernel_suffix }}"
+            echo "Phiên bản kernel hiện tại (hậu tố): ${{ github.event.inputs.kernel_suffix }}"
             for f in ./common/scripts/setlocalversion; do
               sed -i "\$s|echo \"\\\$res\"|echo \"-${{ github.event.inputs.kernel_suffix }}\"|" "$f"
             done
           else
-            echo "当前内核版本后缀：${{ env.KERNEL_NAME }}"
+            echo "Hậu tố phiên bản Kernel hiện tại：${{ env.KERNEL_NAME }}"
             for f in ./common/scripts/setlocalversion; do
               sed -i "\$s|echo \"\\\$res\"|echo \"-${{ env.KERNEL_NAME }}\"|" "$f"
             done
           fi
            
-      - name: 构建内核
+      - name: 🔨Xây dựng Kernel
         run: |
           WORKDIR="$(pwd)"
           export PATH="/usr/lib/ccache:$PATH"
@@ -548,9 +547,9 @@ jobs:
           CLANG_DIR="$WORKDIR/kernel_workspace/clang20/bin"
           CLANG_VERSION="$($CLANG_DIR/clang --version | head -n 1)"
           LLD_VERSION="$($CLANG_DIR/ld.lld --version | head -n 1)"
-          echo "编译器信息:"
-          echo "Clang版本: $CLANG_VERSION"
-          echo "LLD版本: $LLD_VERSION"
+          echo "Thông tin trình biên dịch:"
+          echo "Phiên bản Clang: $CLANG_VERSION"
+          echo "Phiên bản LLD: $LLD_VERSION"
           pahole_version=$(pahole --version 2>/dev/null | head -n1); [ -z "$pahole_version" ] && echo "pahole版本：未安装" || echo "pahole版本：$pahole_version"
           
           export CCACHE_LOGFILE="${{ github.workspace }}/kernel_workspace/ccache.log"
@@ -572,39 +571,39 @@ jobs:
           echo "FAKETIME=$FAKETIME" >> $GITHUB_ENV
           SO_DIR=$(pwd)
           export PRELOAD_LIBS="$SO_DIR/libfakestat.so $SO_DIR/libfaketimeMT.so"
-          #创建 CC (编译器) 包装器
+          # Tạo một trình bao bọc CC (Compiler)
           echo '#!/bin/bash' > cc-wrapper
           echo 'export LD_PRELOAD="'$PRELOAD_LIBS'"' >> cc-wrapper
           echo 'export FAKESTAT="'$FAKESTAT'"' >> cc-wrapper
           echo 'export FAKETIME="'$FAKETIME'"' >> cc-wrapper
           echo 'ccache clang "$@"' >> cc-wrapper
-          #创建 LD (链接器) 包装器
+          # Tạo một trình bao bọc LD (Linker)
           echo '#!/bin/bash' > ld-wrapper
           echo 'export LD_PRELOAD="'$PRELOAD_LIBS'"' >> ld-wrapper
           echo 'export FAKESTAT="'$FAKESTAT'"' >> ld-wrapper
           echo 'export FAKETIME="'$FAKETIME'"' >> ld-wrapper
           echo 'ld.lld "$@"' >> ld-wrapper
           
-          # 测试时间劫持测试是否正常工作
-          echo "--- [Wrapper Test] 正在创建通用的时间劫持测试脚本 ---"
+          # Kiểm tra xem bài kiểm tra chiếm đoạt thời gian có hoạt động chính xác hay không
+          echo "--- [Kiểm tra trình bao bọc] Tạo một kịch bản kiểm tra chiếm đoạt thời gian chung ---"
           echo '#!/bin/bash' > test-wrapper.sh
           echo 'export LD_PRELOAD="'$PRELOAD_LIBS'"' >> test-wrapper.sh
           echo 'export FAKESTAT="'$FAKESTAT'"' >> test-wrapper.sh
           echo 'export FAKETIME="'$FAKETIME'"' >> test-wrapper.sh
           echo 'echo ">>> Wrapper 内部环境检查完毕."' >> test-wrapper.sh
-          echo 'exec "$@"' >> test-wrapper.sh # 执行所有传入的参数
+          echo 'exec "$@"' >> test-wrapper.sh # Thực thi tất cả các tham số được truyền vào
           chmod +x test-wrapper.sh
-          echo "--- [Wrapper Test] 正在测试 (date) 命令 ---"
+          echo "--- [Wrapper Test] Kiểm tra (date) ---"
           ./test-wrapper.sh date
-          echo "--- [Wrapper Test] 正在测试 (stat) 命令 ---"
+          echo "--- [Wrapper Test] Kiểm tra (stat) ---"
           ./test-wrapper.sh stat ./Makefile
-          echo "--- [Wrapper Test] 测试完毕 ---"
+          echo "--- [Wrapper Test] Kiểm tra đã hoàn thành ---"
           chmod +x cc-wrapper ld-wrapper
-          echo "--- 编译前环境时间: $(LD_PRELOAD=$PRELOAD_LIBS date) ---"
-          echo "--- 编译前环境文件时间戳: ---"
+          echo "--- Thời gian môi trường trước biên dịch: $(LD_PRELOAD=$PRELOAD_LIBS date) ---"
+          echo "--- Ẩn thời gian của tệp môi trường trước biên dịch: ---"
           LD_PRELOAD=$PRELOAD_LIBS stat ./Makefile
           
-          #在构建内核的同时清除不必要的.NET, Android NDK, Haskell, CodeQL运行库，清理空间且不阻塞后续步骤运行
+          # Trong quá trình xây dựng nhân hệ điều hành, hãy gỡ bỏ các thư viện runtime .NET, Android NDK, Haskell và CodeQL không cần thiết để giải phóng dung lượng mà không làm gián đoạn các bước tiếp theo.
           sudo rm -rf /usr/share/dotnet &
           sudo rm -rf /usr/local/lib/android &
           sudo rm -rf /opt/ghc &
@@ -612,27 +611,27 @@ jobs:
           make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" LD="ld.lld" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error gki_defconfig &&
           make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="$(pwd)/cc-wrapper" LD="$(pwd)/ld-wrapper" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error Image
           
-          # 编译后时间劫持二次校验
-          echo "--- 编译后环境时间: $(LD_PRELOAD=$PRELOAD_LIBS date) ---"
-          echo "--- 编译后环境文件时间戳: ---"
+          # Xác minh thứ cấp bằng cách chiếm quyền kiểm soát sau thời gian biên dịch
+          echo "--- Thời gian môi trường sau khi biên dịch: $(LD_PRELOAD=$PRELOAD_LIBS date) ---"
+          echo "--- Thời gian biên dịch các tệp môi trường: ---"
           LD_PRELOAD=$PRELOAD_LIBS stat ./Makefile
-          echo "内核编译完成！"
-          echo "ccache状态："
+          echo "Quá trình biên dịch hạt nhân hoàn tất!"
+          echo "Trạng thái ccache:"
           ccache -s
-          echo "编译后空间:"
+          echo "Không gian đã biên dịch:"
           df -h
 
-      - name: 保存新的 ccache 缓存
+      - name: ♻️Lưu bộ nhớ đệm ccache mới
         if: inputs.ccache_update || steps.ccache-restore.outputs.cache-hit != 'true'
         uses: actions/cache/save@v5
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ${{ env.CCACHE_KEY }}-${{ runner.os }}-${{ github.ref_name }}
          
-      - name: 应用KPM并修补内核
+      - name: 🔨Áp dụng KPM và vá lỗi Kernel.
         run: |
           if [[ ${{ github.event.inputs.kpm_enable }} == 'builtin' && ( "${{ github.event.inputs.ksu_type }}" == "sukisu" || "${{ github.event.inputs.ksu_type }}" == "resukisu" ) ]]; then
-            echo "正在应用KPM并修补内核..."
+            echo "Áp dụng KPM và vá lỗi nhân hệ điều hành...."
             cd kernel_workspace/common/out/arch/arm64/boot
             curl -LO https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/latest/download/patch_linux
             chmod +x patch_linux
@@ -641,7 +640,7 @@ jobs:
             mv oImage Image
           fi
           if [[ ${{ github.event.inputs.kpm_enable }} == 'kpn' ]]; then
-            echo "正在应用KP-N并修补内核..."
+            echo "Đang áp dụng KP-N và vá lỗi nhân hệ điều hành..."
             cd kernel_workspace/common/out/arch/arm64/boot
             wget https://github.com/KernelSU-Next/KPatch-Next/releases/latest/download/kptools-linux
             wget https://github.com/KernelSU-Next/KPatch-Next/releases/latest/download/kpimg-linux
@@ -651,18 +650,20 @@ jobs:
             mv oImage Image
           fi
           
-      - name: 克隆 AnyKernel3 并打包
+      - name: 📥 Sao chép AnyKernel3 và đóng gói nó
         id: create_zip
         run: |
           cd kernel_workspace
-          git clone https://github.com/cctv18/AnyKernel3 --depth=1
+          # Clone AnyKernel3 từ nguồn ngoài
+          git clone https://github.com/p0s3id0nVN/AnyKernel3 --depth=1
           rm -rf ./AnyKernel3/.git
           cd AnyKernel3
           cp ../common/out/arch/arm64/boot/Image ./Image
           if [[ ! -f ./Image ]]; then
-            echo "未找到内核镜像文件，构建可能出错"
+            echo "❌ Không tìm thấy tệp Image; quá trình biên dịch có thể đã thất bại."
             exit 1
           fi
+          # Xác định tên KSU để đặt tên file zip
           if [[ ${{ github.event.inputs.ksu_type }} == "sukisu" ]]; then
             KSU_TYPENAME="SukiSU"
           elif [[ ${{ github.event.inputs.ksu_type }} == "resukisu" ]]; then
@@ -688,7 +689,7 @@ jobs:
           zip -r ../$AK3_NAME ./*
           echo "ak3name=$AK3_NAME" >> $GITHUB_OUTPUT
           
-          #为AK3添加注释（调试信息）
+          # Thêm chú thích (thông tin gỡ lỗi) vào AK3
           if [[ -n "${{ github.event.inputs.kernel_suffix }}" ]]; then
             FULL_VERSION=${{ env.KERNEL_VERSION }}.${{ env.SUB_VERSION }}-${{ github.event.inputs.kernel_suffix }}
           else
@@ -715,7 +716,7 @@ jobs:
           echo "BBG: ${{ github.event.inputs.baseband_guard }}" >> ./ak3.log
           zip -z ../$AK3_NAME < ./ak3.log
 
-      - name: 上传 Ccache 调试日志
+      - name: ⏫️Tải lên nhật ký gỡ lỗi Ccache
         if: always() && inputs.ccache_debug
         uses: actions/upload-artifact@v7
         with:
@@ -723,7 +724,7 @@ jobs:
           path: ${{ github.workspace }}/kernel_workspace/ccache.log
           archive: true
 
-      - name: 上传 ZIP 工件
+      - name: ⏫️Tải lên Tệp ZIP
         uses: actions/upload-artifact@v7
         with:
           path: ${{ github.workspace }}/kernel_workspace/AnyKernel*.zip
@@ -738,14 +739,14 @@ jobs:
       actions: read
       
     steps:
-      - name: 下载 ZIP 工件
+      - name: 📥 Tải xuống tệp ZIP từ Artifact
         uses: actions/download-artifact@v8
         with:
           name: ${{ needs.build.outputs.ak3name }}
           path: ./release_zips
           skip-decompress: true
 
-      - name: 设置环境变量
+      - name: 🛠️ Thiết lập biến môi trường và Thông tin hệ thống
         run: |
           if [[ -n "${{ github.event.inputs.kernel_suffix }}" ]]; then
             FULL_VERSION=${{ env.KERNEL_VERSION }}.${{ env.SUB_VERSION }}-${{ github.event.inputs.kernel_suffix }}
@@ -756,8 +757,8 @@ jobs:
             echo "FULL_VERSION=$FULL_VERSION" >> $GITHUB_ENV
             export FULL_VERSION=$FULL_VERSION
           fi
-          TIME="$(TZ='Asia/Shanghai' date +'%y%m%d%H%M%S')"
-          TIME_FORM="$(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')"
+          TIME="$(TZ='Asia/Ho_Chi_Minh' date +'%y%m%d%H%M%S')"
+          TIME_FORM="$(TZ='Asia/Ho_Chi_Minh' date +'%Y-%m-%d %H:%M:%S')"
           echo "TIME=$TIME" >> $GITHUB_ENV
           echo "TIME_FORM=$TIME_FORM" >> $GITHUB_ENV
           TAG_HEAD="OPPO-OPlus-Realme-build"
@@ -771,11 +772,11 @@ jobs:
           elif [[ ${{ github.event.inputs.ksu_type }} == "ksu" ]]; then
             KSU_TYPENAME="KernelSU (Official)"
           else
-            KSU_TYPENAME="无内置KSU"
+            KSU_TYPENAME="Không có KSU tích hợp sẵn"
           fi
           echo "KSU_TYPENAME=$KSU_TYPENAME" >> $GITHUB_ENV
          
-      - name: 创建发布
+      - name: 🚀 Tạo GitHub Release
         id: create_release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
