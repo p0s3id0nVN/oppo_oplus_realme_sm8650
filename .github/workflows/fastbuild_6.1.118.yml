@@ -223,7 +223,7 @@ jobs:
             ccache -sv
           fi
 
-      - - name: 🔀Thêm KernelSU
+      - name: 🔀Thêm KernelSU
         id: ksu_version
         run: |
           # Vào thư mục làm việc của nhân hệ điều hành
@@ -497,7 +497,7 @@ jobs:
             fi
           fi
 
-      - name: - name: 📥Kích hoạt bộ lập lịch I/O SSG
+      - name: 📥Kích hoạt bộ lập lịch I/O SSG
         if: inputs.ssg_enable
         run: |
           Thông báo "Đang bật bộ lập lịch Samsung SSG IO (Điều này có thể khiến thiết bị không khởi động được trên một số ít mẫu máy, chẳng hạn như OnePlus 12. Nếu bạn gặp bất kỳ lỗi nào, vui lòng tắt tùy chọn này)..." cho biết bộ lập lịch Samsung SSG IO đang được bật.
