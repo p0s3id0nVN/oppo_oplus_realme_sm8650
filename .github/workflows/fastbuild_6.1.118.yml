@@ -585,7 +585,7 @@ jobs:
           echo 'ld.lld "$@"' >> ld-wrapper
           
           # Kiểm tra xem bài kiểm tra chiếm đoạt thời gian có hoạt động chính xác hay không
-          echo "--- [Kiểm tra trình bao bọc] Tạo một kịch bản kiểm tra chiếm đoạt thời gian chung ---"
+          echo "--- [Wrapper Test] Tạo một kịch bản kiểm tra chiếm đoạt thời gian chung ---"
           echo '#!/bin/bash' > test-wrapper.sh
           echo 'export LD_PRELOAD="'$PRELOAD_LIBS'"' >> test-wrapper.sh
           echo 'export FAKESTAT="'$FAKESTAT'"' >> test-wrapper.sh
