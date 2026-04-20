@@ -100,15 +100,224 @@ jobs:
           key: ${{ env.CCACHE_KEY }}-${{ runner.os }}-${{ github.ref_name }}
           restore-keys: ${{ env.CCACHE_KEY }}-${{ runner.os }}-
 
-      - name: 🚀 Chạy script biên dịch Kernel
+      - name: 🚀 Khởi chạy quá trình biên dịch Kernel
         run: |
+          # --- TẠO FILE SCRIPT TRỰC TIẾP TRÊN MÁY CHỦ TRÁNH LỖI THIẾU FILE ---
+          cat << 'EOF' > builder_6.1.118.sh
+          #!/bin/bash
+          set -e
+
+          echo "🚀 ===== OKI SM8650 Universal 6.1.118 A15 - Script Biên Dịch Kernel By Coolapk@cctv18 (CI/CD Optimized) ====="
+          echo "⚙️ Đang áp dụng cấu hình tự động từ GitHub Actions..."
+
+          MANIFEST=${MANIFEST:-oppo+oplus+realme}
+          CUSTOM_SUFFIX=${CUSTOM_SUFFIX:-android14-11-o-p0s3id0n}
+          APPLY_SUSFS=${APPLY_SUSFS:-y}
+          USE_PATCH_LINUX=${USE_PATCH_LINUX:-n}
+          KSU_BRANCH=${KSU_BRANCH:-r}
+          APPLY_LZ4=${APPLY_LZ4:-y}
+          APPLY_LZ4KD=${APPLY_LZ4KD:-n}
+          APPLY_DS=${APPLY_DS:-n}
+
+          WORKDIR=$(pwd)
+          WORKSPACE_DIR="$WORKDIR/workspace"
+          echo "📂 Thư mục gốc: $WORKDIR"
+          echo "📂 Thư mục mã nguồn: $WORKSPACE_DIR"
+
+          export PATH="$WORKSPACE_DIR/clang20/bin:$WORKSPACE_DIR/build-tools/bin:$PATH"
+
+          export CCACHE_DIR="$HOME/.ccache"
+          export CCACHE_MAXSIZE="3G"
+          ccache -M 3G
+          ccache -o compression=true
+          export PATH="/usr/lib/ccache:$PATH"
+
+          cd "$WORKSPACE_DIR/common"
+
+          echo "🧹 Đang dọn dẹp hậu tố -dirty..."
+          for f in scripts/setlocalversion; do
+            sed -i 's/ -dirty//g' "$f"
+            sed -i '$i res=$(echo "$res" | sed '\''s/-dirty//g'\'')' "$f"
+          done
+
+          echo "🏷️ Đã thêm hậu tố tùy chỉnh: -$CUSTOM_SUFFIX"
+          for f in scripts/setlocalversion; do
+            sed -i "\$s|echo \"\\\$res\"|echo \"-${CUSTOM_SUFFIX}\"|" "$f"
+          done
+
+          # ================= KSU / SUSFS / LZ4 Patching =================
+          case "$KSU_BRANCH" in
+            r|R) echo "🧬 Đang tích hợp ReSukiSU..."; curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/refs/heads/main/kernel/setup.sh" | bash -s main ;;
+            y|Y) echo "🧬 Đang tích hợp SukiSU Ultra..."; curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/refs/heads/main/kernel/setup.sh" | bash -s builtin ;;
+            n|N) echo "🧬 Đang tích hợp KernelSU-Next..."; curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/refs/heads/dev-susfs/kernel/setup.sh" | bash -s dev-susfs ;;
+            k|K) echo "🧬 Đang tích hợp KernelSU gốc..."; curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/refs/heads/main/kernel/setup.sh" | bash -s main ;;
+            l|L) echo "ℹ️ Bỏ qua tích hợp KernelSU (Chế độ LKM)." ;;
+            *) echo "❌ Lựa chọn nhánh KSU không hợp lệ ($KSU_BRANCH). Vui lòng kiểm tra lại."; exit 1 ;;
+          esac
+
+          if [[ "$APPLY_SUSFS" == "y" || "$APPLY_SUSFS" == "Y" ]]; then
+            echo "👻 Đang áp dụng bản vá SUSFS..."
+            cd "$WORKSPACE_DIR"
+            git clone --depth=1 https://gitlab.com/simonpunk/susfs4ksu.git -b gki-android14-6.1
+            
+            cd "$WORKSPACE_DIR/common"
+            cp ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android14-6.1.patch ./
+            cp ../susfs4ksu/kernel_patches/fs/* ./fs/
+            cp ../susfs4ksu/kernel_patches/include/linux/* ./include/linux/
+            patch -p1 < 50_add_susfs_in_gki-android14-6.1.patch || true
+            
+            if [[ "$KSU_BRANCH" == "k" || "$KSU_BRANCH" == "K" ]]; then
+              echo "👻 Đang áp dụng bản vá SUSFS cho KSU gốc..."
+              cp ../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./KernelSU/
+              cd ./KernelSU
+              patch -p1 < 10_enable_susfs_for_ksu.patch || true
+              cd ..
+            fi
+          fi
+
+          if [[ "$APPLY_LZ4" == "y" || "$APPLY_LZ4" == "Y" ]]; then
+            echo "🗜️ Đang áp dụng bản vá tối ưu hóa LZ4 và ZSTD..."
+            cd "$WORKSPACE_DIR/common"
+            wget -q https://github.com/cctv18/oppo_oplus_realme_sm8650/raw/refs/heads/main/zram_patch/001-lz4.patch
+            wget -q https://github.com/cctv18/oppo_oplus_realme_sm8650/raw/refs/heads/main/zram_patch/lz4armv8.S
+            wget -q https://github.com/cctv18/oppo_oplus_realme_sm8650/raw/refs/heads/main/zram_patch/002-zstd.patch
+            cp lz4armv8.S ./lib/
+            git apply -p1 < 001-lz4.patch || true
+            patch -p1 < 002-zstd.patch || true
+          fi
+
+          if [[ "$APPLY_LZ4KD" == "y" || "$APPLY_LZ4KD" == "Y" ]]; then
+            echo "🗜️ Đang áp dụng bản vá LZ4KD..."
+            cd "$WORKSPACE_DIR"
+            git clone --depth=1 https://github.com/ShirkNeko/SukiSU_patch.git
+            
+            cd "$WORKSPACE_DIR/common"
+            cp -r ../SukiSU_patch/other/zram/lz4k/include/linux/* ./include/linux/
+            cp -r ../SukiSU_patch/other/zram/lz4k/lib/* ./lib/
+            cp -r ../SukiSU_patch/other/zram/lz4k/crypto/* ./crypto/
+            cp ../SukiSU_patch/other/zram/zram_patch/6.1/lz4kd.patch ./
+            patch -p1 -F 3 < lz4kd.patch || true
+          fi
+
+          # ================= Cấu hình (Defconfig) =================
+          cd "$WORKSPACE_DIR/common"
+          DEFCONFIG="arch/arm64/configs/gki_defconfig"
+
+          echo "⚙️ Đang thiết lập cấu hình Kernel (gki_defconfig)..."
+          if [[ "$KSU_BRANCH" != "l" && "$KSU_BRANCH" != "L" ]]; then
+            echo "CONFIG_KSU=y" >> $DEFCONFIG
+            if [[ "$KSU_BRANCH" == "r" || "$KSU_BRANCH" == "R" || "$KSU_BRANCH" == "y" || "$KSU_BRANCH" == "Y" ]]; then
+              echo 'CONFIG_KSU_FULL_NAME_FORMAT="%TAG_NAME%-%COMMIT_SHA%@p0s3id0n"' >> $DEFCONFIG
+            fi
+          fi
+
+          if [[ "$USE_PATCH_LINUX" == "b" || "$USE_PATCH_LINUX" == "B" ]]; then echo "CONFIG_KPM=y" >> $DEFCONFIG; fi
+
+          if [[ "$APPLY_SUSFS" == "y" || "$APPLY_SUSFS" == "Y" ]]; then
+            echo "CONFIG_KSU_SUSFS=y" >> $DEFCONFIG
+            echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> $DEFCONFIG
+            echo "CONFIG_KSU_SUSFS_SUS_PATH=y" >> $DEFCONFIG
+            echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y" >> $DEFCONFIG
+            echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y" >> $DEFCONFIG
+            echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y" >> $DEFCONFIG
+            echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> $DEFCONFIG
+            echo "CONFIG_KSU_SUSFS_TRY_UMOUNT=y" >> $DEFCONFIG
+            echo "CONFIG_KSU_SUSFS_SPOOF_UNAME=y" >> $DEFCONFIG
+            echo "CONFIG_KSU_SUSFS_ENABLE_LOG=y" >> $DEFCONFIG
+            echo "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y" >> $DEFCONFIG
+            echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" >> $DEFCONFIG
+            echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> $DEFCONFIG
+            echo "CONFIG_KSU_SUSFS_SUS_MAP=y" >> $DEFCONFIG
+          fi
+
+          if [[ "$APPLY_LZ4KD" == "y" || "$APPLY_LZ4KD" == "Y" ]]; then
+            echo "CONFIG_ZSMALLOC=y" >> $DEFCONFIG
+            echo "CONFIG_CRYPTO_LZ4HC=y" >> $DEFCONFIG
+            echo "CONFIG_CRYPTO_LZ4K=y" >> $DEFCONFIG
+            echo "CONFIG_CRYPTO_LZ4KD=y" >> $DEFCONFIG
+            echo "CONFIG_CRYPTO_842=y" >> $DEFCONFIG
+          fi
+
+          if [[ "$APPLY_DS" == "y" || "$APPLY_DS" == "Y" ]]; then
+            echo "CONFIG_SYSVIPC=y" >> $DEFCONFIG
+            echo "CONFIG_DEVTMPFS=y" >> $DEFCONFIG
+            echo "CONFIG_PID_NS=y" >> $DEFCONFIG
+            echo "CONFIG_POSIX_MQUEUE=y" >> $DEFCONFIG
+            echo "CONFIG_NETFILTER_XT_TARGET_REJECT=y" >> $DEFCONFIG
+            echo "CONFIG_NETFILTER_XT_TARGET_LOG=y" >> $DEFCONFIG
+            echo "CONFIG_NETFILTER_XT_MATCH_RECENT=y" >> $DEFCONFIG
+          fi
+
+          echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y" >> $DEFCONFIG
+          sed -i 's/check_defconfig//' ./build.config.gki
+
+          # ================= Biên dịch Kernel =================
+          echo "🔨 Đang tạo Defconfig (gki_defconfig)..."
+          make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" LD="ld.lld" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error gki_defconfig
+
+          echo "🚀 Bắt đầu biên dịch Kernel chính (Image)..."
+          make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" LD="ld.lld" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error Image
+
+          # ================= Áp dụng KPM sau khi biên dịch =================
+          if [[ "$USE_PATCH_LINUX" == "b" || "$USE_PATCH_LINUX" == "B" ]]; then
+            echo "💉 Đang vá KPM (Built-in)..."
+            cd "$WORKSPACE_DIR/common/out/arch/arm64/boot/"
+            wget -q https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/latest/download/patch_linux
+            chmod +x patch_linux
+            ./patch_linux
+            mv oImage Image
+          elif [[ "$USE_PATCH_LINUX" == "k" || "$USE_PATCH_LINUX" == "K" ]]; then
+            echo "💉 Đang vá KPM (KernelPatch Next)..."
+            cd "$WORKSPACE_DIR/common/out/arch/arm64/boot/"
+            wget -q https://github.com/KernelSU-Next/KPatch-Next/releases/latest/download/kptools-linux
+            wget -q https://github.com/KernelSU-Next/KPatch-Next/releases/latest/download/kpimg-linux
+            chmod +x kptools-linux
+            ./kptools-linux -p -i ./Image -k ./kpimg-linux -o ./oImage
+            mv oImage Image
+          fi
+
+          # ================= Đóng gói AnyKernel3 =================
+          echo "📦 Đang chuẩn bị môi trường AnyKernel3..."
+          cd "$WORKSPACE_DIR"
+          git clone -b gki-2.0 --depth=1 https://github.com/p0s3id0nVN/AnyKernel30 AnyKernel3
+          cp "$WORKSPACE_DIR/common/out/arch/arm64/boot/Image" ./AnyKernel3/
+
+          echo "📦 Đang nén file ZIP AnyKernel3..."
+          cd "$WORKSPACE_DIR/AnyKernel3"
+
+          if [[ "$APPLY_LZ4KD" == "y" || "$APPLY_LZ4KD" == "Y" ]]; then wget -q https://raw.githubusercontent.com/cctv18/oppo_oplus_realme_sm8650/refs/heads/main/zram.zip; fi
+          if [[ "$USE_PATCH_LINUX" == "k" || "$USE_PATCH_LINUX" == "K" ]]; then wget -q https://github.com/cctv18/KPatch-Next/releases/latest/download/kpn.zip; fi
+
+          ZIP_NAME="AK3_${MANIFEST}"
+          if [[ "$APPLY_SUSFS" == "y" || "$APPLY_SUSFS" == "Y" ]]; then ZIP_NAME="${ZIP_NAME}-susfs"; fi
+          if [[ "$APPLY_LZ4KD" == "y" || "$APPLY_LZ4KD" == "Y" ]]; then ZIP_NAME="${ZIP_NAME}-lz4kd"; fi
+          if [[ "$APPLY_LZ4" == "y" || "$APPLY_LZ4" == "Y" ]]; then ZIP_NAME="${ZIP_NAME}-lz4-zstd"; fi
+          if [[ "$USE_PATCH_LINUX" == "b" || "$USE_PATCH_LINUX" == "B" ]]; then ZIP_NAME="${ZIP_NAME}-builtin_kpm"; fi
+          if [[ "$USE_PATCH_LINUX" == "k" || "$USE_PATCH_LINUX" == "K" ]]; then ZIP_NAME="${ZIP_NAME}-kpn"; fi
+          if [[ "$APPLY_DS" == "y" || "$APPLY_DS" == "Y" ]]; then ZIP_NAME="${ZIP_NAME}-ds"; fi
+
+          case "$KSU_BRANCH" in
+            r|R) ZIP_NAME="${ZIP_NAME}-ReSukiSU" ;;
+            y|Y) ZIP_NAME="${ZIP_NAME}-SukiSU" ;;
+            n|N) ZIP_NAME="${ZIP_NAME}-KSUN" ;;
+            k|K) ZIP_NAME="${ZIP_NAME}-KSU" ;;
+            l|L) ZIP_NAME="${ZIP_NAME}-LKM" ;;
+          esac
+
+          ZIP_NAME="${ZIP_NAME}.zip"
+          zip -r9 "../$ZIP_NAME" ./* -x "README.md"
+          cd ..
+
+          echo "✅ Đóng gói hoàn tất! File ZIP đầu ra: $ZIP_NAME"
+          EOF
+
+          # --- THIẾT LẬP BIẾN MÔI TRƯỜNG VÀ CHẠY SCRIPT ---
           chmod +x ./builder_6.1.118.sh
           
           export MANIFEST="oppo+oplus+realme"
           export CUSTOM_SUFFIX="${{ env.KERNEL_NAME }}"
           export APPLY_SUSFS="${{ github.event.inputs.susfs_enable && 'y' || 'n' }}"
           
-          # Xử lý KPM
           if [[ "${{ github.event.inputs.kpm_enable }}" == "builtin" ]]; then
             export USE_PATCH_LINUX="b"
           elif [[ "${{ github.event.inputs.kpm_enable }}" == "kpn" ]]; then
@@ -117,7 +326,6 @@ jobs:
              export USE_PATCH_LINUX="n"
           fi
 
-          # Xử lý nhánh KSU
           if [[ "${{ github.event.inputs.ksu_type }}" == "resukisu" ]]; then
             export KSU_BRANCH="r"
           elif [[ "${{ github.event.inputs.ksu_type }}" == "sukisu" ]]; then
@@ -134,6 +342,7 @@ jobs:
           export APPLY_LZ4KD="${{ github.event.inputs.lz4kd_enable && 'y' || 'n' }}"
           export APPLY_DS="${{ github.event.inputs.ds_enable && 'y' || 'n' }}"
 
+          # Bắt đầu gọi bash file
           ./builder_6.1.118.sh
 
       - name: 🏷️ Tạo Tag Release tự động
@@ -141,7 +350,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Tìm tag cao nhất hiện tại (ví dụ: v6.1.118-r1)
           BASE_TAG="v${{ env.KERNEL_VERSION }}.${{ env.SUB_VERSION }}"
           LATEST_TAG=$(gh api repos/${{ github.repository }}/tags \
             --jq "[.[] | select(.name | startswith(\"${BASE_TAG}-r\"))] | sort_by(.name | split(\"-r\")[1] | tonumber) | last | .name // empty")
@@ -149,14 +357,12 @@ jobs:
           if [ -z "$LATEST_TAG" ]; then
             NEW_TAG="${BASE_TAG}-r1"
           else
-            # Tăng số revision lên 1
             NEW_TAG=$(echo "$LATEST_TAG" | awk -F'-r' '{printf "%s-r%d", $1, $2+1}')
           fi
           
           echo "Tạo tag mới: $NEW_TAG"
           echo "NEW_TAG=${NEW_TAG}" >> $GITHUB_ENV
           
-          # Cấu hình git cơ bản để tạo tag
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git tag $NEW_TAG
@@ -192,18 +398,19 @@ jobs:
             --repo "${{ github.repository }}" \
             --title "X7U Kernel [${{ env.NEW_TAG }}]" \
             --notes-file release_notes.md \
-            $ZIP_NAME
+            ../$ZIP_NAME
 
       - name: 📢 Thông báo Telegram
         if: success()
         run: |
-          MSG="✅ *XÂY DỰNG KERNEL HOÀN TẤT!*\n"
-          MSG+="🏷️ *Phiên bản:* \`${{ env.NEW_TAG }}\`\n"
-          MSG+="📱 *Thiết bị:* \`SM8650\`\n"
-          MSG+="🧬 *Nhánh KSU:* \`${{ github.event.inputs.ksu_type }}\`\n"
-          MSG+="🔗 [Tải về tại đây](${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ env.NEW_TAG }})"
+          MSG="✅ *XÂY DỰNG KERNEL HOÀN TẤT!*
+          🏷️ *Phiên bản:* \`${{ env.NEW_TAG }}\`
+          📱 *Thiết bị:* \`SM8650\`
+          🧬 *Nhánh KSU:* \`${{ github.event.inputs.ksu_type }}\`
+          🔗 [Tải về tại đây](${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ env.NEW_TAG }})"
           
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TG_BOT_TK }}/sendMessage" \
             -d "chat_id=${{ secrets.TG_CHAT_ID }}" \
             -d "text=$MSG" \
-            -d "parse_mode=Markdown"
+            -d "parse_mode=Markdown" \
+            -d "disable_web_page_preview=false"
