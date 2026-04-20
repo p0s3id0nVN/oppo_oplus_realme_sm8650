@@ -1,0 +1,209 @@
+name: 🚀 Xây dựng Kernel OKI 6.1.118
+
+env:
+  TZ: Asia/Ho_Chi_Minh
+  ANDROID_VERSION: 'android14'
+  KERNEL_VERSION: '6.1'
+  SUB_VERSION: '118'
+  KERNEL_NAME: 'android14-11-o-p0s3id0n'
+  CCACHE_KEY: ccache-neov4-6.1.118
+
+on:
+  workflow_dispatch:
+    inputs:
+      ksu_type:
+        description: '🧬 Chọn nhánh KernelSU (ReSukiSU / SukiSU Ultra / KernelSU Next / KSU gốc / none)'
+        required: true
+        type: choice
+        default: 'resukisu'
+        options:
+          - 'resukisu'
+          - 'sukisu'
+          - 'ksunext'
+          - 'ksu'
+          - 'none'
+      susfs_enable:
+        description: '👻 Bật SUSFS (Hỗ trợ ẩn root tốt hơn, khuyên dùng)'
+        required: true
+        type: boolean
+        default: true
+      kpm_enable:
+        description: '📦 Bật KPM (builtin = KPM của ReSukiSU/SukiSU, kpn = KernelPatch Next, n = tắt)'
+        required: true
+        type: choice
+        default: 'builtin'
+        options:
+          - 'builtin'
+          - 'kpn'
+          - 'n'
+      lz4_enable:
+        description: '🗜️ Bật LZ4 1.10.0 + ZSTD 1.5.7 (Mặc định: Bật)'
+        required: true
+        type: boolean
+        default: true
+      lz4kd_enable:
+        description: '🗜️ Bật LZ4KD (Tùy chọn: Tắt)'
+        required: true
+        type: boolean
+        default: false
+      ds_enable:
+        description: '🌌 Bật Droidspaces (Tùy chọn)'
+        required: true
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    name: 🔨 Build Kernel SM8650
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - name: 📥 Tải mã nguồn (Checkout)
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Khởi tạo môi trường biên dịch
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends \
+            curl bison flex clang binutils dwarves git lld pahole \
+            zip perl make gcc python3 python-is-python3 bc libssl-dev libelf-dev cpio \
+            xz-utils tar unzip ccache aria2
+          
+          mkdir -p workspace
+          cd workspace
+          
+          echo "⬇️ Đang tải mã nguồn kernel..."
+          aria2c -s16 -x16 -k1M https://github.com/cctv18/android_kernel_common_oneplus_sm8650/archive/refs/heads/oneplus/sm8650_b_16.0.0_oneplus12.zip -o common.zip
+          unzip -q common.zip
+          mv android_kernel_common_oneplus_sm8650-* common
+          rm common.zip
+
+          echo "⬇️ Đang tải toolchain Clang..."
+          aria2c -s16 -x16 -k1M https://github.com/cctv18/oneplus_sm8650_toolchain/releases/download/LLVM-Clang20-r547379/clang-r547379.zip -o clang.zip
+          unzip -q clang.zip -d clang20
+          rm clang.zip
+
+          echo "⬇️ Đang tải build tools..."
+          aria2c -s16 -x16 -k1M https://github.com/cctv18/oneplus_sm8650_toolchain/releases/download/LLVM-Clang20-r547379/build-tools.zip -o build-tools.zip
+          unzip -q build-tools.zip
+          rm build-tools.zip
+          
+          echo "🧹 Xóa abi_gki_protected_exports..."
+          rm -f common/android/abi_gki_protected_exports_* || true
+
+      - name: 📦 Thiết lập Ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ${{ env.CCACHE_KEY }}-${{ runner.os }}-${{ github.ref_name }}
+          restore-keys: ${{ env.CCACHE_KEY }}-${{ runner.os }}-
+
+      - name: 🚀 Chạy script biên dịch Kernel
+        run: |
+          chmod +x ./builder_6.1.118.sh
+          
+          export MANIFEST="oppo+oplus+realme"
+          export CUSTOM_SUFFIX="${{ env.KERNEL_NAME }}"
+          export APPLY_SUSFS="${{ github.event.inputs.susfs_enable && 'y' || 'n' }}"
+          
+          # Xử lý KPM
+          if [[ "${{ github.event.inputs.kpm_enable }}" == "builtin" ]]; then
+            export USE_PATCH_LINUX="b"
+          elif [[ "${{ github.event.inputs.kpm_enable }}" == "kpn" ]]; then
+             export USE_PATCH_LINUX="k"
+          else
+             export USE_PATCH_LINUX="n"
+          fi
+
+          # Xử lý nhánh KSU
+          if [[ "${{ github.event.inputs.ksu_type }}" == "resukisu" ]]; then
+            export KSU_BRANCH="r"
+          elif [[ "${{ github.event.inputs.ksu_type }}" == "sukisu" ]]; then
+            export KSU_BRANCH="y"
+          elif [[ "${{ github.event.inputs.ksu_type }}" == "ksunext" ]]; then
+            export KSU_BRANCH="n"
+          elif [[ "${{ github.event.inputs.ksu_type }}" == "ksu" ]]; then
+            export KSU_BRANCH="k"
+          else
+            export KSU_BRANCH="l"
+          fi
+
+          export APPLY_LZ4="${{ github.event.inputs.lz4_enable && 'y' || 'n' }}"
+          export APPLY_LZ4KD="${{ github.event.inputs.lz4kd_enable && 'y' || 'n' }}"
+          export APPLY_DS="${{ github.event.inputs.ds_enable && 'y' || 'n' }}"
+
+          ./builder_6.1.118.sh
+
+      - name: 🏷️ Tạo Tag Release tự động
+        id: create_tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Tìm tag cao nhất hiện tại (ví dụ: v6.1.118-r1)
+          BASE_TAG="v${{ env.KERNEL_VERSION }}.${{ env.SUB_VERSION }}"
+          LATEST_TAG=$(gh api repos/${{ github.repository }}/tags \
+            --jq "[.[] | select(.name | startswith(\"${BASE_TAG}-r\"))] | sort_by(.name | split(\"-r\")[1] | tonumber) | last | .name // empty")
+          
+          if [ -z "$LATEST_TAG" ]; then
+            NEW_TAG="${BASE_TAG}-r1"
+          else
+            # Tăng số revision lên 1
+            NEW_TAG=$(echo "$LATEST_TAG" | awk -F'-r' '{printf "%s-r%d", $1, $2+1}')
+          fi
+          
+          echo "Tạo tag mới: $NEW_TAG"
+          echo "NEW_TAG=${NEW_TAG}" >> $GITHUB_ENV
+          
+          # Cấu hình git cơ bản để tạo tag
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git tag $NEW_TAG
+          git push origin $NEW_TAG
+
+      - name: 📤 Tạo Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd workspace/AnyKernel3
+          ZIP_NAME=$(ls *.zip | head -n 1)
+          
+          cat << EOF > release_notes.md
+          ## 📱 Thông tin bản Build
+          - **Kernel:** \`${{ env.KERNEL_VERSION }}.${{ env.SUB_VERSION }}-${{ env.KERNEL_NAME }}\`
+          - **Thiết bị:** SM8650
+          - **Nhánh KSU:** \`${{ github.event.inputs.ksu_type }}\`
+          - **KPM / SUSFS:** \`${{ github.event.inputs.kpm_enable }}\` / \`${{ github.event.inputs.susfs_enable }}\`
+          - **LZ4/LZ4KD:** \`${{ github.event.inputs.lz4_enable }}\` / \`${{ github.event.inputs.lz4kd_enable }}\`
+          - **Droidspaces:** \`${{ github.event.inputs.ds_enable }}\`
+          - **Thời gian Build:** \`$(TZ='Asia/Ho_Chi_Minh' date +'%d-%m-%Y %H:%M:%S')\`
+
+          ### 📋 Hướng dẫn cài đặt
+          1. **Recovery:** Nếu có TWRP/OrangeFox, flash file ZIP rồi khởi động lại.
+          2. **Đã có Root:** Sử dụng [KernelFlasher](https://github.com/capntrips/KernelFlasher) để flash trực tiếp.
+          
+          > [!WARNING]
+          > Vui lòng sao lưu phân vùng **Boot** trước khi thực hiện để tránh rủi ro!
+          EOF
+
+          echo "🚀 Tạo Release: ${{ env.NEW_TAG }}"
+          gh release create "${{ env.NEW_TAG }}" \
+            --repo "${{ github.repository }}" \
+            --title "X7U Kernel [${{ env.NEW_TAG }}]" \
+            --notes-file release_notes.md \
+            $ZIP_NAME
+
+      - name: 📢 Thông báo Telegram
+        if: success()
+        run: |
+          MSG="✅ *XÂY DỰNG KERNEL HOÀN TẤT!*\n"
+          MSG+="🏷️ *Phiên bản:* \`${{ env.NEW_TAG }}\`\n"
+          MSG+="📱 *Thiết bị:* \`SM8650\`\n"
+          MSG+="🧬 *Nhánh KSU:* \`${{ github.event.inputs.ksu_type }}\`\n"
+          MSG+="🔗 [Tải về tại đây](${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ env.NEW_TAG }})"
+          
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TG_BOT_TK }}/sendMessage" \
+            -d "chat_id=${{ secrets.TG_CHAT_ID }}" \
+            -d "text=$MSG" \
+            -d "parse_mode=Markdown"
