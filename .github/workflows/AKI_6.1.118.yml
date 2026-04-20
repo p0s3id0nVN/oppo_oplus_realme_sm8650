@@ -102,7 +102,7 @@ jobs:
 
       - name: 🚀 Chạy script biên dịch Kernel
         run: |
-          chmod +x ./builder_6.1.118.sh
+          chmod +x ./local/builder_6.1.118.sh
           
           export MANIFEST="oppo+oplus+realme"
           export CUSTOM_SUFFIX="${{ env.KERNEL_NAME }}"
