@@ -1,16 +1,22 @@
-name: 🚀 6.1.118 Build OKI Kernel (OPPO/OnePlus/Realme)
+name: 🚀 Build OKI Kernel (OPPO/OnePlus/Realme)
 
 env:
   TZ: Asia/Ho_Chi_Minh
   ANDROID_VERSION: 'android14'
   KERNEL_VERSION: '6.1'
-  SUB_VERSION: '118'
   KERNEL_NAME: 'android14-11-o-p0s3id0n'
-  CCACHE_KEY: ccache-ecsv1-6.1.118
 
 on:
   workflow_dispatch:
     inputs:
+      sub_version:
+        description: '🔢 Chọn phiên bản Kernel phụ (118 hoặc 141)'
+        required: true
+        type: choice
+        default: '118'
+        options:
+          - '118'
+          - '141'
       ksu_type:
         description: '🧬 Nhánh KernelSU (ReSukiSU/SukiSU Ultra/KernelSU Next/KSU(Gốc)/Không KSU, mặc định ReSukiSU)'
         required: true
@@ -101,6 +107,11 @@ jobs:
       actions: write
       contents: read
     steps:
+      - name: ⚙️ Khởi tạo Biến môi trường phiên bản
+        run: |
+          echo "SUB_VERSION=${{ github.event.inputs.sub_version }}" >> $GITHUB_ENV
+          echo "CCACHE_KEY=ccache-ecsv1-6.1.${{ github.event.inputs.sub_version }}" >> $GITHUB_ENV
+
       - name: 📦 Cài đặt thư viện + Khởi tạo Source & Toolchain LLVM-Clang20
         run: |
           rm -rf kernel_workspace
@@ -116,16 +127,24 @@ jobs:
           sudo apt update &&
           sudo apt-get install -y --no-install-recommends binutils python-is-python3 libssl-dev libelf-dev &
           
-          # Sử dụng ccache-ECS bản mới nhất (Tối ưu hóa bộ nhớ đệm, tăng tốc build)
+          # Sử dụng ccache-ECS bản mới nhất
           wget https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/lib/ccache-x86-64 -O ccache &&
           sudo cp -f ./ccache /usr/bin/ccache &&
           sudo chmod +x /usr/bin/ccache &&
           rm -f ./ccache &
           
-          echo "📥 Đang clone source code kernel..."
-          aria2c -s16 -x16 -k1M https://github.com/cctv18/android_kernel_common_oneplus_sm8650/archive/refs/heads/oneplus/sm8650_b_16.0.0_oneplus12.zip -o common.zip && 
+          echo "📥 Đang clone source code kernel phiên bản 6.1.${{ env.SUB_VERSION }}..."
+          if [ "${{ env.SUB_VERSION }}" == "141" ]; then
+            ZIP_URL="https://github.com/cctv18/android_kernel_common_oneplus_sm8650/archive/refs/heads/oneplus/sm8650_b_16.0.0_oneplus12_6.1.141.zip"
+            FOLDER_NAME="android_kernel_common_oneplus_sm8650-oneplus-sm8650_b_16.0.0_oneplus12_6.1.141"
+          else
+            ZIP_URL="https://github.com/cctv18/android_kernel_common_oneplus_sm8650/archive/refs/heads/oneplus/sm8650_b_16.0.0_oneplus12.zip"
+            FOLDER_NAME="android_kernel_common_oneplus_sm8650-oneplus-sm8650_b_16.0.0_oneplus12"
+          fi
+          
+          aria2c -s16 -x16 -k1M "$ZIP_URL" -o common.zip && 
           unzip -q common.zip && 
-          mv "android_kernel_common_oneplus_sm8650-oneplus-sm8650_b_16.0.0_oneplus12" common &&
+          mv "$FOLDER_NAME" common &&
           rm -rf common.zip &
           
           echo "📥 Đang clone toolchain llvm-Clang20..." &&
@@ -677,13 +696,10 @@ jobs:
       actions: read
       
     steps:
-      # ==========================================
-      # THÊM BƯỚC CHECKOUT NÀY VÀO ĐẦU JOB RELEASE
-      # ==========================================
       - name: 📥 Checkout mã nguồn
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Bắt buộc để lấy lịch sử Git và push Tag
+          fetch-depth: 0
 
       - name: 📥 Tải xuống file ZIP (Artifact)
         uses: actions/download-artifact@v8
@@ -694,12 +710,14 @@ jobs:
 
       - name: ⚙️ Cài đặt biến môi trường
         run: |
+          echo "SUB_VERSION=${{ github.event.inputs.sub_version }}" >> $GITHUB_ENV
+          
           if [[ -n "${{ github.event.inputs.kernel_suffix }}" ]]; then
-            FULL_VERSION=${{ env.KERNEL_VERSION }}.${{ env.SUB_VERSION }}-${{ github.event.inputs.kernel_suffix }}
+            FULL_VERSION=${{ env.KERNEL_VERSION }}.${{ github.event.inputs.sub_version }}-${{ github.event.inputs.kernel_suffix }}
             echo "FULL_VERSION=$FULL_VERSION" >> $GITHUB_ENV
             export FULL_VERSION=$FULL_VERSION
           else
-            FULL_VERSION=${{ env.KERNEL_VERSION }}.${{ env.SUB_VERSION }}-${{ env.KERNEL_NAME }}
+            FULL_VERSION=${{ env.KERNEL_VERSION }}.${{ github.event.inputs.sub_version }}-${{ env.KERNEL_NAME }}
             echo "FULL_VERSION=$FULL_VERSION" >> $GITHUB_ENV
             export FULL_VERSION=$FULL_VERSION
           fi
@@ -786,7 +804,7 @@ jobs:
           2. Nếu máy đã có Root, cài đặt [HorizonKernelFlasher](https://github.com/libxzr/HorizonKernelFlasher/releases), dùng nó để flash file AnyKernel3 và khởi động lại.
           3. Nếu trước đó đã flash Kernel SukiSU Ultra và Manager là bản mới nhất, có thể dùng luôn Manager để flash AnyKernel3.
           4. **Lưu ý ZRAM**: Nếu chuyển từ bản CÓ patch lz4kd sang KHÔNG có patch, vui lòng TẮT module zram trước khi flash để tránh lỗi.
-          5. **Lưu ý Module**: Do KernelSU đã cập nhật tính năng Meta-module, các bản Manager mới (trừ KernelSU Next) cần có Meta-module để mount bình thường. Các meta-module phổ biến: [meta overlayfs](https://github.com/KernelSU-Modules-Repo/meta-overlayfs), [mountify](https://github.com/backslashxx/mountify), [meta magicmount](https://github.com/7a72/meta-magic_mount/), [hybrid mount](https://github.com/YuzakiKokuban/meta-hybrid_mount). Nếu mới cài KSU lần đầu hoặc vừa nâng cấp Manager, hãy cài 1 Meta-module trước để các module khác hoạt động.
+          5. **Lưu ý Module**: Do KernelSU đã cập nhật tính năng Meta-module, các bản Manager mới (trừ KernelSU Next) cần có Meta-module để mount bình thường. Các meta-module phổ biến: [meta overlayfs](https://github.com/KernelSU-Modules-Repo/meta-overlayfs), [mountify](https://github.com/backslashxx/mountify), [meta magicmount](https://github.com/7a72/meta-magic_mount/), [meta magicmount rs](https://github.com/Tools-cx-app/meta-magic_mount/), [hybrid mount](https://github.com/YuzakiKokuban/meta-hybrid_mount)等。若你是第一次使用KSU或刚从旧版KSU管理器升级至新版，请先安装一个元模块，这样...
           6. **Lưu ý KPN**: KernelPatch Next (KPN) là bản KPM độc lập, chạy trên mọi môi trường KSU/Magisk (không hỗ trợ Apatch). KHÔNG dùng chung với KPM có sẵn của (Re)SukiSU. Trước khi dùng KPN, hãy đảm bảo Kernel của bạn chưa có KPM.
           
           > [!CAUTION]

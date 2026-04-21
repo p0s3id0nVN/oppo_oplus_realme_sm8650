@@ -74,7 +74,7 @@ jobs:
             echo "-> Không có Release nào để xóa."
           else
             for tag in $RELEASES; do
-              echo "  -> Đang xóa Release: $tag"
+              echo "  -> 🗑️ Đang xóa Release: $tag"
               gh release delete "$tag" --repo ${{ github.repository }} --yes || true
             done
           fi
@@ -85,7 +85,7 @@ jobs:
             echo "-> Không có Tag nào để xóa."
           else
             for tag in $TAGS; do
-              echo "  -> Đang xóa Tag: $tag"
+              echo "  -> 🗑️ Đang xóa Tag: $tag"
               git push --delete origin "$tag" || true
             done
           fi
