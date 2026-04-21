@@ -696,13 +696,10 @@ jobs:
       actions: read
       
     steps:
-      # ==========================================
-      # THÊM BƯỚC CHECKOUT NÀY VÀO ĐẦU JOB RELEASE
-      # ==========================================
       - name: 📥 Checkout mã nguồn
         uses: actions/checkout@v6
         with:
-          fetch-depth: 0  # Bắt buộc để lấy lịch sử Git và push Tag
+          fetch-depth: 0
 
       - name: 📥 Tải xuống file ZIP (Artifact)
         uses: actions/download-artifact@v8
@@ -822,7 +819,7 @@ jobs:
 
       - name: 📢 Gửi thông báo Telegram (Kênh)
         env:
-          TK_BOT_TK: ${{ secrets.TK_BOT_TK }}
+          TG_BOT_TK: ${{ secrets.TG_BOT_TK }}
           CHAT_ID: ${{ secrets.TG_CHAT_ID }}
         run: |
           set -euo pipefail
@@ -857,7 +854,7 @@ jobs:
 
       - name: 📢 Gửi thông báo Telegram (Nhóm)
         env:
-          TK_BOT_TK: ${{ secrets.TK_BOT_TK }}
+          TG_BOT_TK: ${{ secrets.TG_BOT_TK }}
           CHAT_ID: ${{ secrets.TG_CHAT_ID2 }}
         run: |
           set -euo pipefail
@@ -885,7 +882,7 @@ jobs:
           EOF
           )
 
-          curl -s "https://api.telegram.org/bot${TK_BOT_TK}/sendMessage" \
+          curl -s "https://api.telegram.org/bot${TG_BOT_TK}/sendMessage" \
             -d chat_id="${CHAT_ID}" \
             -d parse_mode="HTML" \
             --data-urlencode text="${TEXT}"
