@@ -696,6 +696,14 @@ jobs:
       actions: read
       
     steps:
+      # ==========================================
+      # THÊM BƯỚC CHECKOUT NÀY VÀO ĐẦU JOB RELEASE
+      # ==========================================
+      - name: 📥 Checkout mã nguồn
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # Bắt buộc để lấy lịch sử Git và push Tag
+
       - name: 📥 Tải xuống file ZIP (Artifact)
         uses: actions/download-artifact@v8
         with:
