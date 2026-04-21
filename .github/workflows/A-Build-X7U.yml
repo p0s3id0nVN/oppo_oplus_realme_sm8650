@@ -639,9 +639,9 @@ jobs:
             wget https://github.com/cctv18/KPatch-Next/releases/latest/download/kpn.zip
           fi
           if [[ -n "${{ github.event.inputs.kernel_suffix }}" ]]; then
-            AK3_NAME=AK3_${KSU_TYPENAME}_${{ env.KSUVER }}_${{ env.KERNEL_VERSION }}_${{ github.event.inputs.kernel_suffix }}.zip
+            AK3_NAME="AK3_${KSU_TYPENAME}_${KSUVER}_android14-11-${{ env.KERNEL_VERSION }}.${{ env.SUB_VERSION }}_SUSFS_${{ github.event.inputs.kernel_suffix }}.zip"
           else
-            AK3_NAME=AK3_${KSU_TYPENAME}_${{ env.KSUVER }}_${{ env.KERNEL_VERSION }}_${{ env.KERNEL_NAME }}.zip
+            AK3_NAME="AK3_${KSU_TYPENAME}_${KSUVER}_android14-11-${{ env.KERNEL_VERSION }}.${{ env.SUB_VERSION }}_SUSFS_PSD.zip"
           fi
           zip -r ../$AK3_NAME ./*
           echo "ak3name=$AK3_NAME" >> $GITHUB_OUTPUT
@@ -847,7 +847,7 @@ jobs:
           EOF
           )
 
-          curl -s "https://api.telegram.org/bot${TK_BOT_TK}/sendMessage" \
+          curl -s "https://api.telegram.org/bot${TG_BOT_TK}/sendMessage" \
             -d chat_id="${CHAT_ID}" \
             -d parse_mode="HTML" \
             --data-urlencode text="${TEXT}"
