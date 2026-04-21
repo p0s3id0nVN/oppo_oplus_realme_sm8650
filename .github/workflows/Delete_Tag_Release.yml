@@ -1,0 +1,93 @@
+name: 🗑️ Công cụ Dọn dẹp Release & Tag
+
+# Cấp quyền ghi để cho phép xóa Release và Tag
+permissions:
+  contents: write
+  actions: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      action_type:
+        description: '⚠️ CHỌN HÀNH ĐỘNG CẦN THỰC HIỆN'
+        required: true
+        type: choice
+        options:
+          - 'Xóa 1 bản Release & Tag cụ thể'
+          - 'Xóa TẤT CẢ Release & Tag (CẨN THẬN)'
+        default: 'Xóa 1 bản Release & Tag cụ thể'
+      target_tag:
+        description: '🏷️ Tên Tag cần xóa (Ví dụ: v1.0.0). BỎ TRỐNG nếu chọn Xóa TẤT CẢ.'
+        required: false
+        type: string
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    # BẢO MẬT: Chỉ cho phép chủ sở hữu Repo được phép chạy lệnh xóa này
+    if: github.actor == github.repository_owner
+
+    steps:
+      # Bắt buộc phải checkout mã nguồn để sử dụng các lệnh Git
+      - name: 📥 Checkout mã nguồn
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ============================================================
+      # HÀNH ĐỘNG 1: XÓA 1 BẢN RELEASE VÀ TAG CỤ THỂ
+      # ============================================================
+      - name: 🗑️ Xóa 1 bản Release & Tag cụ thể
+        if: inputs.action_type == 'Xóa 1 bản Release & Tag cụ thể'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ inputs.target_tag }}"
+          if [ -z "$TAG" ]; then
+            echo "::error::Bạn chưa nhập tên Tag! Vui lòng điền tên Tag vào ô 'target_tag'."
+            exit 1
+          fi
+          
+          echo "🔍 Đang tiến hành xóa Release và Tag: $TAG..."
+          
+          # 1. Xóa Release bằng GitHub CLI
+          gh release delete "$TAG" --repo ${{ github.repository }} --yes || echo "⚠️ Không tìm thấy Release $TAG hoặc đã bị xóa trước đó."
+          
+          # 2. Xóa Tag bằng Git Push
+          git push --delete origin "$TAG" || echo "⚠️ Không tìm thấy Tag $TAG trên GitHub hoặc đã bị xóa."
+          
+          echo "✅ Đã dọn dẹp thành công: $TAG"
+
+      # ============================================================
+      # HÀNH ĐỘNG 2: XÓA SẠCH TOÀN BỘ KHO RELEASE VÀ TAG
+      # ============================================================
+      - name: ☢️ XÓA SẠCH TOÀN BỘ Release và Tag
+        if: inputs.action_type == 'Xóa TẤT CẢ Release & Tag (CẨN THẬN)'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "⚠️ CẢNH BÁO: ĐANG TIẾN HÀNH XÓA SẠCH TOÀN BỘ KHO RELEASE & TAG..."
+          
+          echo "1️⃣ Đang quét và xóa tất cả Releases..."
+          RELEASES=$(gh release list --repo ${{ github.repository }} --limit 1000 | awk '{print $1}')
+          if [ -z "$RELEASES" ]; then
+            echo "-> Không có Release nào để xóa."
+          else
+            for tag in $RELEASES; do
+              echo "  -> Đang xóa Release: $tag"
+              gh release delete "$tag" --repo ${{ github.repository }} --yes || true
+            done
+          fi
+          
+          echo "2️⃣ Đang quét và xóa tất cả Tags..."
+          TAGS=$(git tag)
+          if [ -z "$TAGS" ]; then
+            echo "-> Không có Tag nào để xóa."
+          else
+            for tag in $TAGS; do
+              echo "  -> Đang xóa Tag: $tag"
+              git push --delete origin "$tag" || true
+            done
+          fi
+          
+          echo "✅ HOÀN TẤT! ĐÃ XÓA SẠCH TOÀN BỘ RELEASE VÀ TAG TRONG REPOSITORY NÀY!"
