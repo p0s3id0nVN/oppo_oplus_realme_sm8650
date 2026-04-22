@@ -9,19 +9,88 @@ env:
 on:
   workflow_dispatch:
     inputs:
-      sub_version: { description: '🔢 Phiên bản phụ (118/141)', required: true, type: choice, default: '118', options: ['118', '141'] }
-      ksu_type: { description: '🧬 Nhánh KernelSU', required: true, type: choice, default: 'resukisu', options: ['resukisu', 'sukisu', 'ksunext', 'ksu', 'none'] }
-      susfs_enable: { description: '👻 Bật SUSFS', required: true, type: boolean, default: 'true' }
-      kpm_enable: { description: '📦 Bật KPM', required: true, type: choice, default: 'false', options: ['false', 'builtin', 'kpn'] }
-      lz4_enable: { description: '🗜️ Patch lz4 1.10.0 + zstd', required: true, type: boolean, default: 'true' }
-      lz4kd_enable: { description: '🗜️ Patch LZ4KD', required: true, type: boolean, default: 'false' }
-      bbr_enable: { description: '🚀 Thuật toán mạng BBR', required: true, type: choice, default: 'false', options: ['false', 'true', 'default'] }
-      better_net: { description: '🌐 Tối ưu mạng (IPSet)', required: true, type: boolean, default: 'true' }
-      ssg_enable: { description: '💾 Samsung SSG IO', required: true, type: boolean, default: 'true' }
-      rekernel_enable: { description: '❄️ Hỗ trợ Re-Kernel', required: true, type: boolean, default: 'false' }
-      baseband_guard: { description: '🛡️ Bảo vệ Baseband', required: true, type: boolean, default: 'true' }
-      ccache_update: { description: '🔄 Cập nhật ccache', required: true, type: boolean, default: 'false' }
-      kernel_suffix: { description: '🏷️ Hậu tố Kernel', required: false, type: string, default: '' }
+      sub_version:
+        description: '🔢 Phiên bản phụ (118/141)'
+        required: true
+        type: choice
+        default: '118'
+        options:
+          - '118'
+          - '141'
+      ksu_type:
+        description: '🧬 Nhánh KernelSU'
+        required: true
+        type: choice
+        default: 'resukisu'
+        options:
+          - 'resukisu'
+          - 'sukisu'
+          - 'ksunext'
+          - 'ksu'
+          - 'none'
+      susfs_enable:
+        description: '👻 Bật SUSFS'
+        required: true
+        type: boolean
+        default: true
+      kpm_enable:
+        description: '📦 Bật KPM'
+        required: true
+        type: choice
+        default: 'false'
+        options:
+          - 'false'
+          - 'builtin'
+          - 'kpn'
+      lz4_enable:
+        description: '🗜️ Patch lz4 1.10.0 + zstd'
+        required: true
+        type: boolean
+        default: true
+      lz4kd_enable:
+        description: '🗜️ Patch LZ4KD'
+        required: true
+        type: boolean
+        default: false
+      bbr_enable:
+        description: '🚀 Thuật toán mạng BBR'
+        required: true
+        type: choice
+        default: 'false'
+        options:
+          - 'false'
+          - 'true'
+          - 'default'
+      better_net:
+        description: '🌐 Tối ưu mạng (IPSet)'
+        required: true
+        type: boolean
+        default: true
+      ssg_enable:
+        description: '💾 Samsung SSG IO'
+        required: true
+        type: boolean
+        default: true
+      rekernel_enable:
+        description: '❄️ Hỗ trợ Re-Kernel'
+        required: true
+        type: boolean
+        default: false
+      baseband_guard:
+        description: '🛡️ Bảo vệ Baseband'
+        required: true
+        type: boolean
+        default: true
+      ccache_update:
+        description: '🔄 Cập nhật ccache'
+        required: true
+        type: boolean
+        default: false
+      kernel_suffix:
+        description: '🏷️ Hậu tố Kernel'
+        required: false
+        type: string
+        default: ''
 
 jobs:
   build:
@@ -29,7 +98,9 @@ jobs:
     outputs:
       ksuver: ${{ steps.ksu_version.outputs.ksuver }}
       ak3name: ${{ steps.create_zip.outputs.ak3name }}
-    permissions: { actions: write, contents: read }
+    permissions:
+      actions: write
+      contents: read
     steps:
       - name: ⚙️ Khởi tạo Biến & Môi trường
         run: |
@@ -94,7 +165,8 @@ jobs:
               sed -i "s/DKSU_VERSION=16/DKSU_VERSION=${KSUVER}/" KernelSU/kernel/Kbuild ;;
             *) KSUVER="0" ;;
           esac
-          echo "KSUVER=$KSUVER" >> $GITHUB_ENV; echo "ksuver=$KSUVER" >> $GITHUB_OUTPUT
+          echo "KSUVER=$KSUVER" >> $GITHUB_ENV
+          echo "ksuver=$KSUVER" >> $GITHUB_OUTPUT
 
           if [ "${{ inputs.susfs_enable }}" == "true" ] && [ "${{ inputs.ksu_type }}" != "none" ]; then
             git clone --depth=1 https://github.com/cctv18/susfs4oki.git susfs4ksu -b oki-${{ env.ANDROID_VERSION }}-${{ env.KERNEL_VERSION }}
@@ -264,15 +336,19 @@ jobs:
 
       - name: 📤 Upload Artifact
         uses: actions/upload-artifact@v4
-        with: { name: "${{ steps.create_zip.outputs.ak3name }}", path: "kernel_workspace/${{ steps.create_zip.outputs.ak3name }}" }
+        with:
+          name: ${{ steps.create_zip.outputs.ak3name }}
+          path: kernel_workspace/${{ steps.create_zip.outputs.ak3name }}
 
   release:
     needs: build
     runs-on: ubuntu-latest
-    permissions: { contents: write }
+    permissions:
+      contents: write
     steps:
       - name: 📥 Download & Tạo Tag Release
-        env: { GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} }
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir release_zips
           gh run download ${{ github.run_id }} -n ${{ needs.build.outputs.ak3name }} -D release_zips
