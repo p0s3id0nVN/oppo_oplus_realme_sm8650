@@ -1,0 +1,900 @@
+name: 🚀 6.1.118 Build Nhanh Kernel OPlus (OPPO/OnePlus/Realme)
+
+env:
+  TZ: Asia/Ho_Chi_Minh
+  ANDROID_VERSION: 'android14'
+  KERNEL_VERSION: '6.1'
+  SUB_VERSION: '118'
+  KERNEL_NAME: 'android14-11-o-p0s3id0n'
+  CCACHE_KEY: ccache-ecsv1-6.1.118
+
+on:
+  workflow_dispatch:
+    inputs:
+      ksu_type:
+        description: '🧬 Nhánh KernelSU (ReSukiSU/SukiSU Ultra/KernelSU Next/KSU(Gốc)/Không KSU, mặc định ReSukiSU)'
+        required: true
+        type: choice
+        default: 'resukisu'
+        options:
+          - 'resukisu'
+          - 'sukisu'
+          - 'ksunext'
+          - 'ksu'
+          - 'none'
+      susfs_enable:
+        description: '👻 Bật SUSFS (Tăng cường ẩn mount; có thể tốn pin nhẹ, tắt nếu upstream lỗi hoặc không cần)'
+        required: true
+        type: boolean
+        default: 'true'
+      kpm_enable:
+        description: '📦 Bật KPM (builtin: dùng KPM tích hợp sẵn, kpn: dùng KPM độc lập; để false nếu không cần)'
+        required: true
+        type: choice
+        default: 'false'
+        options:
+          - 'false'
+          - 'builtin'
+          - 'kpn'
+      lz4_enable:
+        description: '🗜️ Cài đặt patch lz4 1.10.0 + zstd 1.5.7'
+        required: true
+        type: boolean
+        default: 'true'
+      lz4kd_enable:
+        description: '🗜️ Cài đặt patch LZ4KD (Nếu đã bật patch lz4+zstd thì có thể không cần bật)'
+        required: true
+        type: boolean
+        default: 'false'
+      bbr_enable:
+        description: '🚀 Bật thuật toán mạng BBR (Tối ưu upload, ít tác dụng khi dùng hàng ngày; false: tắt, default: mặc định)'
+        required: true
+        type: choice
+        default: 'false'
+        options:
+          - 'false'
+          - 'true'
+          - 'default'
+      better_net:
+        description: '🌐 Bật mở rộng cấu hình mạng (Hỗ trợ ipset và các tính năng mạng nâng cao của iptables)'
+        required: true
+        type: boolean
+        default: 'true'
+      ssg_enable:
+        description: '💾 Bật bộ lập lịch IO Samsung SSG (Tăng tốc độ IO; có thể gây lỗi trên OnePlus 12)'
+        required: true
+        type: boolean
+        default: 'true'
+      rekernel_enable:
+        description: '❄️ Bật hỗ trợ Re-Kernel (Kết hợp với Freezer/NoActive để tăng khả năng đóng băng ứng dụng)'
+        required: true
+        type: boolean
+        default: 'false'
+      baseband_guard:
+        description: '🛡️ Bật bảo vệ Baseband cấp kernel (Chống ghi vào phân vùng non-user, chống brick máy)'
+        required: true
+        type: boolean
+        default: 'true'
+      ccache_update:
+        description: '🔄 Cập nhật cache ccache (Ghi đè cache lên repo, bật khi đổi config, source code hoặc cần làm mới)'
+        required: true
+        type: boolean
+        default: 'false'
+      ccache_debug:
+        description: '🐛 Upload log debug Ccache (Dùng để fix lỗi ccache, không cần thiết thì đừng bật)'
+        required: true
+        type: boolean
+        default: 'false'
+      kernel_suffix:
+        description: '🏷️ Hậu tố Kernel (Để trống dùng mặc định, đừng thêm dấu gạch ngang ở đầu hoặc khoảng trắng)'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      ksuver: ${{ steps.ksu_version.outputs.ksuver }}
+      ak3name: ${{ steps.create_zip.outputs.ak3name }}
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: 📦 Cài đặt thư viện + Khởi tạo Source & Toolchain LLVM-Clang20
+        run: |
+          rm -rf kernel_workspace
+          mkdir kernel_workspace
+          cd kernel_workspace
+          echo "Kho lưu trữ hiện tại: $GITHUB_REPOSITORY"
+          echo "Nhánh hiện tại: $GITHUB_REF_NAME"
+          
+          sudo apt-mark hold firefox &&
+          sudo apt-mark hold libc-bin &&
+          sudo apt purge man-db &&
+          sudo rm -rf /var/lib/man-db/auto-update &&
+          sudo apt update &&
+          sudo apt-get install -y --no-install-recommends binutils python-is-python3 libssl-dev libelf-dev &
+          
+          # Sử dụng ccache-ECS bản mới nhất (Tối ưu hóa bộ nhớ đệm, tăng tốc build)
+          wget https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/lib/ccache-x86-64 -O ccache &&
+          sudo cp -f ./ccache /usr/bin/ccache &&
+          sudo chmod +x /usr/bin/ccache &&
+          rm -f ./ccache &
+          
+          echo "📥 Đang clone source code kernel..."
+          aria2c -s16 -x16 -k1M https://github.com/cctv18/android_kernel_common_oneplus_sm8650/archive/refs/heads/oneplus/sm8650_b_16.0.0_oneplus12.zip -o common.zip && 
+          unzip -q common.zip && 
+          mv "android_kernel_common_oneplus_sm8650-oneplus-sm8650_b_16.0.0_oneplus12" common &&
+          rm -rf common.zip &
+          
+          echo "📥 Đang clone toolchain llvm-Clang20..." &&
+          mkdir -p clang20 &&
+          aria2c -s16 -x16 -k1M https://github.com/cctv18/oneplus_sm8650_toolchain/releases/download/LLVM-Clang20-r547379/clang-r547379.zip -o clang.zip &&
+          unzip -q clang.zip -d clang20 &&
+          rm -rf clang.zip &
+          
+          echo "📥 Đang clone build-tools..." &&
+          aria2c -s16 -x16 -k1M https://github.com/cctv18/oneplus_sm8650_toolchain/releases/download/LLVM-Clang20-r547379/build-tools.zip -o build-tools.zip &&
+          unzip -q build-tools.zip &&
+          rm -rf build-tools.zip &
+          
+          wait
+          echo "✅ Khởi tạo source code và toolchain hoàn tất!"
+          echo "🧹 Đang gỡ bỏ bảo vệ ABI & xóa hậu tố dirty..."
+          rm common/android/abi_gki_protected_exports_* || true
+          for f in common/scripts/setlocalversion; do
+            sed -i 's/ -dirty//g' "$f"
+            sed -i '$i res=$(echo "$res" | sed '\''s/-dirty//g'\'')' "$f"
+          done
+
+      - name: ⚙️ Cấu hình thư mục ccache
+        run: |
+          echo "CCACHE_DIR=$HOME/.ccache_${{ env.KERNEL_VERSION }}.${{ env.SUB_VERSION }}" >> $GITHUB_ENV
+          echo "CCACHE_MAXSIZE=3G" >> $GITHUB_ENV
+          echo "💾 Dung lượng đĩa hiện tại:"
+          df -h
+          echo "🏷️ Phiên bản Kernel đang build: ${{ env.KERNEL_VERSION }}.${{ env.SUB_VERSION }}"
+
+      - name: ♻️ Khôi phục cache ccache
+        uses: actions/cache@v5
+        id: ccache-restore
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ env.CCACHE_KEY }}-${{ runner.os }}-${{ github.ref_name }}
+          restore-keys: |
+            ${{ env.CCACHE_KEY }}-${{ runner.os }}-
+            ${{ env.CCACHE_KEY }}-
+
+      - name: ☁️ Kéo cache ccache công khai được thiết lập sẵn
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🔍 Kiểm tra trạng thái cache cục bộ..."
+          if [ -d "${{ env.CCACHE_DIR }}" ] && [ "$(ls -A ${{ env.CCACHE_DIR }} 2>/dev/null)" ]; then
+            echo "✅ Phát hiện cache cục bộ, bỏ qua kéo cache công khai!"
+            exit 0
+          fi
+          
+          echo "⚠️ Cache miss, đang thử kéo ccache công khai..."
+          mkdir -p ${{ env.CCACHE_DIR }}
+          FILE_NAME="ccache-${{ env.KERNEL_VERSION }}.${{ env.SUB_VERSION }}.tar.zst"
+          
+          if gh release download -p "$FILE_NAME" -R cctv18/public_ccache; then
+            echo "⬇️ Đã tải xong $FILE_NAME, đang giải nén..."
+            tar -I zstd -xf "$FILE_NAME" -C ${{ env.CCACHE_DIR }}
+            echo "✅ Khôi phục ccache công khai thành công!"
+          else
+            echo "⚠️ Không tìm thấy file ccache tương ứng, sẽ tiến hành build toàn bộ (Full Compile)..."
+          fi
+
+      - name: 🧹 Xóa cache ccache cũ
+        if: inputs.ccache_update
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🗑️ Đang xóa cache cũ trong kho lưu trữ..."
+          if gh cache delete ${{ env.CCACHE_KEY }}-${{ runner.os }}-${{ github.ref_name }} -R ${{ github.repository }}; then
+            echo "✅ Xóa cache cũ thành công!"
+          else
+            echo "⚠️ Cache cũ không tồn tại hoặc đã bị dọn dẹp!"
+          fi
+      
+      - name: 🚀 Khởi tạo và cấu hình ccache
+        run: |
+          export CCACHE_COMPILERCHECK="none"
+          export CCACHE_BASEDIR="${{ github.workspace }}"
+          export CCACHE_NOHASHDIR="true"
+          export CCACHE_NOHARDLINK="true"
+          export CCACHE_DIR="${{ env.CCACHE_DIR }}"
+          export CCACHE_MAXSIZE="${{ env.CCACHE_MAXSIZE }}"
+          
+          mkdir -p "$CCACHE_DIR"
+          
+          echo "⚙️ Thiết lập dung lượng ccache tối đa: $CCACHE_MAXSIZE"
+          ccache -M "$CCACHE_MAXSIZE"
+          ccache -o compression=true
+          
+          echo "📊 Trạng thái ccache ban đầu:"
+          ccache -s
+          
+          if [ "${{ steps.ccache-restore.outputs.cache-hit }}" == 'true' ]; then
+            echo "🔍 Chi tiết Hit Cache:"
+            ccache -sv
+          fi
+
+      - name: 🧬 Thêm KernelSU
+        id: ksu_version
+        run: |
+          cd kernel_workspace
+          if [[ ${{ github.event.inputs.ksu_type }} == "sukisu" ]]; then
+            echo "🧬 Đang cấu hình SukiSU Ultra..."
+            curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/refs/heads/main/kernel/setup.sh" | bash -s builtin
+            cd ./KernelSU
+            GIT_COMMIT_HASH=$(git rev-parse --short=8 HEAD)
+            echo "Mã Commit hiện tại: $GIT_COMMIT_HASH"
+            export KSU_VERSION=$KSU_VERSION
+            for i in {1..3}; do
+              KSU_API_VERSION=$(curl -s "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/builtin/kernel/Makefile" | 
+                grep -m1 "KSU_VERSION_API :=" | 
+                awk -F'= ' '{print $2}' | 
+                tr -d '[:space:]')
+              [ -n "$KSU_API_VERSION" ] && break || sleep 1
+            done
+            [ -z "$KSU_API_VERSION" ] && KSU_API_VERSION="3.1.7"
+            echo "KSU_API_VERSION=$KSU_API_VERSION" >> $GITHUB_ENV
+            VERSION_DEFINITIONS=$'define get_ksu_version_full\nv\\$1-'"$GIT_COMMIT_HASH"$'@cctv18\nendef\n\nKSU_VERSION_API := '"$KSU_API_VERSION"$'\nKSU_VERSION_FULL := v'"$KSU_API_VERSION"$'-'"$GIT_COMMIT_HASH"$'@cctv18'
+            sed -i '/define get_ksu_version_full/,/endef/d' kernel/Makefile
+            sed -i '/KSU_VERSION_API :=/d' kernel/Makefile
+            sed -i '/KSU_VERSION_FULL :=/d' kernel/Makefile
+            awk -v def="$VERSION_DEFINITIONS" '
+              /REPO_OWNER :=/ {print; print def; inserted=1; next}
+              1
+              END {if (!inserted) print def}
+            ' kernel/Makefile > kernel/Makefile.tmp && mv kernel/Makefile.tmp kernel/Makefile
+
+            KSU_VERSION=$(expr $(git rev-list --count main) + 37185 2>/dev/null || echo 114514)
+            echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
+            echo "ksuver=$KSU_VERSION" >> $GITHUB_OUTPUT
+
+            grep -A10 "REPO_OWNER" kernel/Makefile
+            grep "KSU_VERSION_FULL" kernel/Makefile
+            echo "Phiên bản SukiSU: v${KSU_API_VERSION}-${GIT_COMMIT_HASH}@cctv18"
+          elif [[ ${{ github.event.inputs.ksu_type }} == "resukisu" ]]; then
+            echo "🧬 Đang cấu hình ReSukiSU..."
+            curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/refs/heads/main/kernel/setup.sh" | bash -s main
+            echo 'CONFIG_KSU_FULL_NAME_FORMAT="%TAG_NAME%-%COMMIT_SHA%@cctv18"' >> ./common/arch/arm64/configs/gki_defconfig
+            cd ./KernelSU
+            KSU_VERSION=$(expr $(git rev-list --count main) + 30700 2>/dev/null || echo 114514)
+            echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
+            echo "ksuver=$KSU_VERSION" >> $GITHUB_OUTPUT
+          elif [[ ${{ github.event.inputs.ksu_type }} == "ksunext" ]]; then
+            echo "🧬 Đang cấu hình KernelSU Next..."
+            curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/refs/heads/dev-susfs/kernel/setup.sh" | bash -s dev-susfs
+            cd KernelSU-Next
+            rm -rf .git
+            KSU_VERSION=$(expr $(curl -sI "https://api.github.com/repos/pershoot/KernelSU-Next/commits?sha=dev&per_page=1" | grep -i "link:" | sed -n 's/.*page=\([0-9]*\)>; rel="last".*/\1/p') "+" 30000)
+            echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
+            echo "ksuver=$KSU_VERSION" >> $GITHUB_OUTPUT
+            sed -i "s/KSU_VERSION_FALLBACK := 1/KSU_VERSION_FALLBACK := $KSU_VERSION/g" kernel/Kbuild
+            KSU_GIT_TAG=$(curl -sL "https://api.github.com/repos/KernelSU-Next/KernelSU-Next/tags" | grep -o '"name": *"[^"]*"' | head -n 1 | sed 's/"name": "//;s/"//')
+            sed -i "s/KSU_VERSION_TAG_FALLBACK := v0.0.1/KSU_VERSION_TAG_FALLBACK := $KSU_GIT_TAG/g" kernel/Kbuild
+            cd ../common/drivers/kernelsu
+            wget https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/other_patch/apk_sign.patch
+            patch -p2 -N -F 3 < apk_sign.patch || true
+          elif [[ ${{ github.event.inputs.ksu_type }} == "ksu" ]]; then
+            echo "🧬 Đang cấu hình KernelSU (Official)..."
+            curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/refs/heads/main/kernel/setup.sh" | bash -s main
+            cd ./KernelSU
+            KSU_VERSION=$(expr $(curl -sI "https://api.github.com/repos/tiann/KernelSU/commits?sha=main&per_page=1" | grep -i "link:" | sed -n 's/.*page=\([0-9]*\)>; rel="last".*/\1/p') "+" 30000)
+            echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
+            echo "ksuver=$KSU_VERSION" >> $GITHUB_OUTPUT
+            sed -i "s/DKSU_VERSION=16/DKSU_VERSION=${KSU_VERSION}/" kernel/Kbuild
+          else
+            echo "⚠️ Chọn Không tích hợp KSU, đang bỏ qua bước này..."
+          fi
+
+      - name: 👻 Áp dụng patch KernelSU & SUSFS
+        if: inputs.susfs_enable
+        run: |
+          cd kernel_workspace
+          if [[ ${{ github.event.inputs.ksu_type }} != "none" ]]; then
+            echo "👻 Đang thêm patch SUSFS..."
+            git clone --depth=1 https://github.com/cctv18/susfs4oki.git susfs4ksu -b oki-${{ env.ANDROID_VERSION }}-${{ env.KERNEL_VERSION }}
+            wget https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/other_patch/69_hide_stuff.patch -O ./common/69_hide_stuff.patch
+            cp ./susfs4ksu/kernel_patches/50_add_susfs_in_gki-${{ env.ANDROID_VERSION }}-${{ env.KERNEL_VERSION }}.patch ./common/
+            cp ./susfs4ksu/kernel_patches/fs/* ./common/fs/
+            cp ./susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
+            cd ./common
+            patch -p1 < 50_add_susfs_in_gki-${{ env.ANDROID_VERSION }}-${{ env.KERNEL_VERSION }}.patch || true
+            patch -p1 -N -F 3 < 69_hide_stuff.patch || true
+            cd ..
+          else
+            echo "⚠️ Không tích hợp KSU nên bỏ qua luôn patch SUSFS..."
+          fi
+          if [[ ${{ github.event.inputs.ksu_type }} == "ksu" ]]; then
+            echo "👻 Đang vá SUSFS cho KernelSU Official..."
+            cp ./susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./KernelSU/
+            cd ./KernelSU
+            patch -p1 < 10_enable_susfs_for_ksu.patch || true
+          fi
+          
+      - name: 🗜️ Áp dụng patch lz4 1.10.0 & zstd 1.5.7
+        if: inputs.lz4_enable
+        run: |
+          echo "🗜️ Đang thêm patch lz4 1.10.0 & zstd 1.5.7..."
+          cd kernel_workspace
+          git clone --depth=1 https://github.com/$GITHUB_REPOSITORY.git -b $GITHUB_REF_NAME $GITHUB_ACTOR
+          cp ./$GITHUB_ACTOR/zram_patch/001-lz4.patch ./common/
+          cp ./$GITHUB_ACTOR/zram_patch/lz4armv8.S ./common/lib
+          cp ./$GITHUB_ACTOR/zram_patch/002-zstd.patch ./common/
+          cd ./common
+          git apply -p1 < 001-lz4.patch || true
+          patch -p1 < 002-zstd.patch || true
+
+      - name: 🗜️ Áp dụng patch lz4kd
+        if: inputs.lz4kd_enable
+        run: |
+          echo "🗜️ Đang thêm patch lz4kd..."
+          cd kernel_workspace
+          if [ ! -d "SukiSU_patch" ]; then
+            git clone --depth=1 https://github.com/ShirkNeko/SukiSU_patch.git
+          fi
+          cd common
+          cp -r ../SukiSU_patch/other/zram/lz4k/include/linux/* ./include/linux/
+          cp -r ../SukiSU_patch/other/zram/lz4k/lib/* ./lib
+          cp -r ../SukiSU_patch/other/zram/lz4k/crypto/* ./crypto
+          cp ../SukiSU_patch/other/zram/zram_patch/${{ env.KERNEL_VERSION }}/lz4kd.patch ./
+          patch -p1 -F 3 < lz4kd.patch || true
+          
+      - name: 👻 Thêm cấu hình SUSFS
+        if: inputs.susfs_enable
+        run: |
+          cd kernel_workspace
+          echo "CONFIG_KSU_SUSFS=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_SUS_PATH=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_TRY_UMOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_SPOOF_UNAME=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_ENABLE_LOG=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_SUS_MAP=y" >> ./common/arch/arm64/configs/gki_defconfig
+          
+      - name: ⚙️ Thêm cấu hình KSU & Khác
+        run: |
+          cd kernel_workspace
+          echo "CONFIG_KSU=y" >> ./common/arch/arm64/configs/gki_defconfig
+          if [[ ${{ github.event.inputs.kpm_enable }} == 'builtin' && ( "${{ github.event.inputs.ksu_type }}" == "sukisu" || "${{ github.event.inputs.ksu_type }}" == "resukisu" ) ]]; then
+            echo "CONFIG_KPM=y" >> ./common/arch/arm64/configs/gki_defconfig
+          fi
+          if [[ "${{ github.event.inputs.susfs_enable }}" == "false" ]]; then
+            echo "CONFIG_KSU_SUSFS=n" >> ./common/arch/arm64/configs/gki_defconfig
+          fi
+          # Mountify (backslashxx/mountify)
+          echo "CONFIG_TMPFS_XATTR=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_TMPFS_POSIX_ACL=y" >> ./common/arch/arm64/configs/gki_defconfig
+          if [[ ${{ github.event.inputs.lz4kd_enable }} == 'true' ]]; then
+            echo "CONFIG_ZSMALLOC=y" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_CRYPTO_LZ4HC=y" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_CRYPTO_LZ4K=y" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_CRYPTO_LZ4KD=y" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_CRYPTO_842=y" >> ./common/arch/arm64/configs/gki_defconfig
+          fi
+          # O2 Optimization
+          echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y" >> ./common/arch/arm64/configs/gki_defconfig
+          sed -i 's/check_defconfig//' ./common/build.config.gki
+          echo "CONFIG_HEADERS_INSTALL=n" >> ./common/arch/arm64/configs/gki_defconfig
+          
+      - name: 🌐 Bật cấu hình tối ưu tính năng mạng
+        if: inputs.better_net
+        run: |
+          cd kernel_workspace
+          echo "CONFIG_BPF_STREAM_PARSER=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_NETFILTER_XT_SET=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_MAX=65534" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_BITMAP_IP=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_BITMAP_IPMAC=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_BITMAP_PORT=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_HASH_IP=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_HASH_IPMARK=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_HASH_IPPORT=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_HASH_IPPORTIP=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_HASH_IPPORTNET=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_HASH_IPMAC=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_HASH_MAC=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_HASH_NETPORTNET=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_HASH_NET=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_HASH_NETNET=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_HASH_NETPORT=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_HASH_NETIFACE=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_SET_LIST_SET=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP6_NF_NAT=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP6_NF_TARGET_MASQUERADE=y" >> ./common/arch/arm64/configs/gki_defconfig
+          
+          cd common
+          wget https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/other_patch/config.patch
+          patch -p1 -F 3 < config.patch || true
+
+      - name: 🚀 Thêm các thuật toán kiểm soát tắc nghẽn mạng (BBR...)
+        run: |
+          if [[ "${{ github.event.inputs.bbr_enable }}" != "false" ]]; then
+            echo "🚀 Đang thêm BBR và các thuật toán TCP..."
+            cd kernel_workspace
+            echo "CONFIG_TCP_CONG_ADVANCED=y" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_TCP_CONG_BBR=y" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_TCP_CONG_CUBIC=y" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_TCP_CONG_VEGAS=y" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_TCP_CONG_NV=y" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_TCP_CONG_WESTWOOD=y" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_TCP_CONG_HTCP=y" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_TCP_CONG_BRUTAL=y" >> ./common/arch/arm64/configs/gki_defconfig
+            if [[ "${{ github.event.inputs.bbr_enable }}" == "default" ]]; then
+              echo "📌 Đang set BBR làm mặc định..."
+              echo "CONFIG_DEFAULT_TCP_CONG=bbr" >> ./common/arch/arm64/configs/gki_defconfig
+            else
+              echo "CONFIG_DEFAULT_TCP_CONG=cubic" >> ./common/arch/arm64/configs/gki_defconfig
+            fi
+          fi
+
+      - name: 💾 Bật bộ lập lịch IO Samsung SSG
+        if: inputs.ssg_enable
+        run: |
+          echo "💾 Đang bật Samsung SSG (Cảnh báo: OnePlus 12 có thể dính lỗi không boot, tắt đi nếu bị)..."
+          cd kernel_workspace
+          echo "CONFIG_MQ_IOSCHED_SSG=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_MQ_IOSCHED_SSG_CGROUP=y" >> ./common/arch/arm64/configs/gki_defconfig
+
+      - name: ❄️ Bật hỗ trợ Re-Kernel
+        if: inputs.rekernel_enable
+        run: |
+          echo "❄️ Đang bật Re-Kernel (dùng chung với Freezer/NoActive để đóng băng app tốt hơn)..."
+          cd kernel_workspace
+          echo "CONFIG_REKERNEL=y" >> ./common/arch/arm64/configs/gki_defconfig
+
+      - name: 🛡️ Bật bảo vệ Baseband cấp Kernel
+        if: inputs.baseband_guard
+        run: |
+          echo "🛡️ Đang bật Baseband Guard..."
+          cd kernel_workspace
+          echo "CONFIG_BBG=y" >> ./common/arch/arm64/configs/gki_defconfig
+          cd ./common
+          curl -sSL https://github.com/cctv18/Baseband-guard/raw/master/setup.sh | bash
+          sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' security/Kconfig
+
+      - name: 🏷️ Thêm hậu tố tên Kernel
+        run: |
+          cd kernel_workspace
+          echo "🏷️ Thay đổi hậu tố Kernel..."
+          if [[ -n "${{ github.event.inputs.kernel_suffix }}" ]]; then
+            echo "Hậu tố tùy chỉnh: ${{ github.event.inputs.kernel_suffix }}"
+            for f in ./common/scripts/setlocalversion; do
+              sed -i "\$s|echo \"\\\$res\"|echo \"-${{ github.event.inputs.kernel_suffix }}\"|" "$f"
+            done
+          else
+            echo "Hậu tố mặc định: ${{ env.KERNEL_NAME }}"
+            for f in ./common/scripts/setlocalversion; do
+              sed -i "\$s|echo \"\\\$res\"|echo \"-${{ env.KERNEL_NAME }}\"|" "$f"
+            done
+          fi
+           
+      - name: 🔨 Build Kernel
+        run: |
+          WORKDIR="$(pwd)"
+          export PATH="/usr/lib/ccache:$PATH"
+          export PATH="$WORKDIR/kernel_workspace/clang20/bin:$PATH"
+          export PATH="$WORKDIR/kernel_workspace/build-tools/bin:$PATH"
+          CLANG_DIR="$WORKDIR/kernel_workspace/clang20/bin"
+          CLANG_VERSION="$($CLANG_DIR/clang --version | head -n 1)"
+          LLD_VERSION="$($CLANG_DIR/ld.lld --version | head -n 1)"
+          echo "💻 Thông tin Trình biên dịch:"
+          echo "Phiên bản Clang: $CLANG_VERSION"
+          echo "Phiên bản LLD: $LLD_VERSION"
+          pahole_version=$(pahole --version 2>/dev/null | head -n1); [ -z "$pahole_version" ] && echo "Phiên bản pahole: Chưa cài" || echo "Phiên bản pahole: $pahole_version"
+          
+          export CCACHE_LOGFILE="${{ github.workspace }}/kernel_workspace/ccache.log"
+          export CCACHE_COMPILERCHECK="none"
+          export CCACHE_BASEDIR="${{ github.workspace }}"
+          export CCACHE_NOHASHDIR="true"
+          export CCACHE_NOHARDLINK="true"
+          export CCACHE_DIR="${{ env.CCACHE_DIR }}"
+          export CCACHE_MAXSIZE="3G"
+          export CCACHE_IS_KERNEL_COMPILING="true"
+          echo "sloppiness = file_stat_matches,include_file_ctime,include_file_mtime,pch_defines,file_macro,time_macros" >> "$CCACHE_DIR/ccache.conf"
+          
+          cd kernel_workspace/common
+          wget https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/lib/libfakestat.so
+          wget https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/lib/libfaketimeMT.so
+          chmod 777 ./*.so
+          export FAKESTAT="2025-05-25 12:00:00"
+          export FAKETIME="@2025-05-25 13:00:00"
+          echo "FAKESTAT=$FAKESTAT" >> $GITHUB_ENV
+          echo "FAKETIME=$FAKETIME" >> $GITHUB_ENV
+          SO_DIR=$(pwd)
+          export PRELOAD_LIBS="$SO_DIR/libfakestat.so $SO_DIR/libfaketimeMT.so"
+          
+          echo '#!/bin/bash' > cc-wrapper
+          echo 'export LD_PRELOAD="'$PRELOAD_LIBS'"' >> cc-wrapper
+          echo 'export FAKESTAT="'$FAKESTAT'"' >> cc-wrapper
+          echo 'export FAKETIME="'$FAKETIME'"' >> cc-wrapper
+          echo 'ccache clang "$@"' >> cc-wrapper
+          
+          echo '#!/bin/bash' > ld-wrapper
+          echo 'export LD_PRELOAD="'$PRELOAD_LIBS'"' >> ld-wrapper
+          echo 'export FAKESTAT="'$FAKESTAT'"' >> ld-wrapper
+          echo 'export FAKETIME="'$FAKETIME'"' >> ld-wrapper
+          echo 'ld.lld "$@"' >> ld-wrapper
+          
+          echo "--- [Wrapper Test] Đang test Wrapper ---"
+          echo '#!/bin/bash' > test-wrapper.sh
+          echo 'export LD_PRELOAD="'$PRELOAD_LIBS'"' >> test-wrapper.sh
+          echo 'export FAKESTAT="'$FAKESTAT'"' >> test-wrapper.sh
+          echo 'export FAKETIME="'$FAKETIME'"' >> test-wrapper.sh
+          echo 'echo ">>> Wrapper đã sẵn sàng."' >> test-wrapper.sh
+          echo 'exec "$@"' >> test-wrapper.sh 
+          chmod +x test-wrapper.sh
+          echo "--- Đang Test lệnh (date) ---"
+          ./test-wrapper.sh date
+          echo "--- Đang Test lệnh (stat) ---"
+          ./test-wrapper.sh stat ./Makefile
+          chmod +x cc-wrapper ld-wrapper
+          echo "--- Giờ hệ thống trước khi build: $(LD_PRELOAD=$PRELOAD_LIBS date) ---"
+          
+          sudo rm -rf /usr/share/dotnet &
+          sudo rm -rf /usr/local/lib/android &
+          sudo rm -rf /opt/ghc &
+          sudo rm -rf /opt/hostedtoolcache/CodeQL &
+          make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" LD="ld.lld" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error gki_defconfig &&
+          make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="$(pwd)/cc-wrapper" LD="$(pwd)/ld-wrapper" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error Image
+          
+          echo "--- Giờ hệ thống sau khi build: $(LD_PRELOAD=$PRELOAD_LIBS date) ---"
+          echo "✅ Build Kernel hoàn tất!"
+          echo "📊 Tình trạng ccache:"
+          ccache -s
+          df -h
+
+      - name: 💾 Lưu cache ccache mới
+        if: inputs.ccache_update || steps.ccache-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ env.CCACHE_KEY }}-${{ runner.os }}-${{ github.ref_name }}
+         
+      - name: 📦 Áp dụng KPM và vá Kernel
+        run: |
+          if [[ ${{ github.event.inputs.kpm_enable }} == 'builtin' && ( "${{ github.event.inputs.ksu_type }}" == "sukisu" || "${{ github.event.inputs.ksu_type }}" == "resukisu" ) ]]; then
+            echo "📦 Đang áp dụng Built-in KPM..."
+            cd kernel_workspace/common/out/arch/arm64/boot
+            curl -LO https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/latest/download/patch_linux
+            chmod +x patch_linux
+            ./patch_linux
+            rm -f Image
+            mv oImage Image
+          fi
+          if [[ ${{ github.event.inputs.kpm_enable }} == 'kpn' ]]; then
+            echo "📦 Đang áp dụng KPN..."
+            cd kernel_workspace/common/out/arch/arm64/boot
+            wget https://github.com/KernelSU-Next/KPatch-Next/releases/latest/download/kptools-linux
+            wget https://github.com/KernelSU-Next/KPatch-Next/releases/latest/download/kpimg-linux
+            chmod +x ./kptools-linux
+            ./kptools-linux -p -i ./Image -k ./kpimg-linux -o ./oImage
+            rm -f Image
+            mv oImage Image
+          fi
+          
+      - name: 📦 Clone AnyKernel3 và Đóng gói
+        id: create_zip
+        run: |
+          cd kernel_workspace
+          git clone https://github.com/p0s3id0nVN/AnyKernel3 --depth=1
+          rm -rf ./AnyKernel3/.git
+          cd AnyKernel3
+          cp ../common/out/arch/arm64/boot/Image ./Image
+          if [[ ! -f ./Image ]]; then
+            echo "❌ Không tìm thấy file Image, build lỗi!"
+            exit 1
+          fi
+          if [[ ${{ github.event.inputs.ksu_type }} == "sukisu" ]]; then
+            KSU_TYPENAME="SukiSU"
+          elif [[ ${{ github.event.inputs.ksu_type }} == "resukisu" ]]; then
+            KSU_TYPENAME="ReSukiSU"
+          elif [[ ${{ github.event.inputs.ksu_type }} == "ksunext" ]]; then
+            KSU_TYPENAME="KSUNext"
+          elif [[ ${{ github.event.inputs.ksu_type }} == "ksu" ]]; then
+            KSU_TYPENAME="KSU"
+          else
+            KSU_TYPENAME="none"
+          fi
+          if [[ ${{ github.event.inputs.lz4kd_enable }} == 'true' ]]; then
+            wget https://raw.githubusercontent.com/$GITHUB_REPOSITORY/refs/heads/$GITHUB_REF_NAME/zram.zip
+          fi
+          if [[ ${{ github.event.inputs.kpm_enable }} == 'kpn' ]]; then
+            wget https://github.com/cctv18/KPatch-Next/releases/latest/download/kpn.zip
+          fi
+          if [[ -n "${{ github.event.inputs.kernel_suffix }}" ]]; then
+            AK3_NAME=AK3_${KSU_TYPENAME}_${{ env.KSUVER }}_${{ env.KERNEL_VERSION }}_${{ github.event.inputs.kernel_suffix }}.zip
+          else
+            AK3_NAME=AK3_${KSU_TYPENAME}_${{ env.KSUVER }}_${{ env.KERNEL_VERSION }}_${{ env.KERNEL_NAME }}.zip
+          fi
+          zip -r ../$AK3_NAME ./*
+          echo "ak3name=$AK3_NAME" >> $GITHUB_OUTPUT
+          
+          if [[ -n "${{ github.event.inputs.kernel_suffix }}" ]]; then
+            FULL_VERSION=${{ env.KERNEL_VERSION }}.${{ env.SUB_VERSION }}-${{ github.event.inputs.kernel_suffix }}
+          else
+            FULL_VERSION=${{ env.KERNEL_VERSION }}.${{ env.SUB_VERSION }}-${{ env.KERNEL_NAME }}
+          fi
+          TIME_NOW="$(TZ='Asia/Ho_Chi_Minh' date +'%Y-%m-%d %H:%M:%S')"
+          echo "Author: $GITHUB_ACTOR" > ./ak3.log
+          echo "Repo: $GITHUB_REPOSITORY" >> ./ak3.log
+          echo "Branch: $GITHUB_REF_NAME" >> ./ak3.log
+          echo "Run ID: $GITHUB_RUN_ID" >> ./ak3.log
+          echo "Commit: $GITHUB_SHA" >> ./ak3.log
+          echo "Time: $TIME_NOW" >> ./ak3.log
+          echo "Kernel Ver: $FULL_VERSION" >> ./ak3.log
+          echo "KSU Branch: ${KSU_TYPENAME}" >> ./ak3.log
+          echo "KSU Ver: ${KSUVER}" >> ./ak3.log
+          echo "susfs: ${{ github.event.inputs.susfs_enable }}" >> ./ak3.log
+          echo "KPM: ${{ github.event.inputs.kpm_enable }}" >> ./ak3.log
+          echo "LZ4: ${{ github.event.inputs.lz4_enable }}" >> ./ak3.log
+          echo "LZ4KD: ${{ github.event.inputs.lz4kd_enable }}" >> ./ak3.log
+          echo "IPset: ${{ github.event.inputs.better_net }}" >> ./ak3.log
+          echo "BBR&Brutal: ${{ github.event.inputs.bbr_enable }}" >> ./ak3.log
+          echo "SSG: ${{ github.event.inputs.ssg_enable }}" >> ./ak3.log
+          echo "Re-Kernel: ${{ github.event.inputs.rekernel_enable }}" >> ./ak3.log
+          echo "BBG: ${{ github.event.inputs.baseband_guard }}" >> ./ak3.log
+          zip -z ../$AK3_NAME < ./ak3.log
+
+      - name: 📤 Upload log debug Ccache
+        if: always() && inputs.ccache_debug
+        uses: actions/upload-artifact@v7
+        with:
+          name: ccache-debug-log
+          path: ${{ github.workspace }}/kernel_workspace/ccache.log
+          archive: true
+
+      - name: 📤 Upload file ZIP
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ github.workspace }}/kernel_workspace/AnyKernel*.zip
+          archive: false
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      actions: read
+      
+    steps:
+      - name: 📥 Tải xuống file ZIP (Artifact)
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.build.outputs.ak3name }}
+          path: ./release_zips
+          skip-decompress: true
+
+      - name: ⚙️ Cài đặt biến môi trường
+        run: |
+          if [[ -n "${{ github.event.inputs.kernel_suffix }}" ]]; then
+            FULL_VERSION=${{ env.KERNEL_VERSION }}.${{ env.SUB_VERSION }}-${{ github.event.inputs.kernel_suffix }}
+            echo "FULL_VERSION=$FULL_VERSION" >> $GITHUB_ENV
+            export FULL_VERSION=$FULL_VERSION
+          else
+            FULL_VERSION=${{ env.KERNEL_VERSION }}.${{ env.SUB_VERSION }}-${{ env.KERNEL_NAME }}
+            echo "FULL_VERSION=$FULL_VERSION" >> $GITHUB_ENV
+            export FULL_VERSION=$FULL_VERSION
+          fi
+          TIME="$(TZ='Asia/Shanghai' date +'%y%m%d%H%M%S')"
+          TIME_FORM="$(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')"
+          echo "TIME=$TIME" >> $GITHUB_ENV
+          echo "TIME_FORM=$TIME_FORM" >> $GITHUB_ENV
+          TAG_HEAD="OPPO-OPlus-Realme-build"
+          echo "TAG_HEAD=$TAG_HEAD" >> $GITHUB_ENV
+          if [[ ${{ github.event.inputs.ksu_type }} == "sukisu" ]]; then
+            KSU_TYPENAME="SukiSU Ultra"
+          elif [[ ${{ github.event.inputs.ksu_type }} == "resukisu" ]]; then
+            KSU_TYPENAME="ReSukiSU"
+          elif [[ ${{ github.event.inputs.ksu_type }} == "ksunext" ]]; then
+            KSU_TYPENAME="KernelSU Next"
+          elif [[ ${{ github.event.inputs.ksu_type }} == "ksu" ]]; then
+            KSU_TYPENAME="KernelSU (Official)"
+          else
+            KSU_TYPENAME="Không tích hợp KSU"
+          fi
+          echo "KSU_TYPENAME=$KSU_TYPENAME" >> $GITHUB_ENV
+
+      - name: 🏷️ Tạo Tag phiên bản tự động (-r)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_BASE="${{ env.TAG_HEAD }}-v${{ env.FULL_VERSION }}"
+          
+          # Tìm tag mới nhất bắt đầu bằng TAG_BASE
+          LATEST_TAG=$(gh api repos/${{ github.repository }}/tags --jq '.[].name' 2>/dev/null | grep "^${TAG_BASE}-r" | head -n1 || echo "")
+          
+          if [ -z "$LATEST_TAG" ]; then
+            NEW_TAG="${TAG_BASE}-r1"
+          else
+            CURRENT_NUM=$(echo "$LATEST_TAG" | awk -F'-r' '{print $NF}')
+            if [[ "$CURRENT_NUM" =~ ^[0-9]+$ ]]; then
+              NEW_NUM=$((CURRENT_NUM + 1))
+              NEW_TAG="${TAG_BASE}-r${NEW_NUM}"
+            else
+              NEW_TAG="${TAG_BASE}-r1"
+            fi
+          fi
+          
+          echo "NEW_TAG=$NEW_TAG" >> $GITHUB_ENV
+          
+          git config --global user.name "BuildBot"
+          git config --global user.email "BuildGkiKernel@gmail.com"
+          git tag "$NEW_TAG"
+          git push origin "$NEW_TAG"
+         
+      - name: 🚀 Tạo GitHub Release
+        id: create_release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat << 'EOF' > release_notes.md
+          ### 📱 Kernel Chung SM8650 OPlus (OPPO/OnePlus/Realme) ${{ env.KSU_TYPENAME }} | Thông tin Build
+          - **Phiên bản Kernel**: ${{ env.FULL_VERSION }}
+          - **Thời gian biên dịch**: ${{ env.TIME_FORM }}
+          - **Thiết bị**: Dùng chung Snapdragon 8 Gen 3 bản ${{ env.KERNEL_VERSION }}.${{ env.SUB_VERSION }} (Dựa trên source OKI chính thức OnePlus 12 ${{ env.KERNEL_VERSION }}.${{ env.SUB_VERSION }})
+          - **Nhánh KSU**: ${{ env.KSU_TYPENAME }}
+          - **Hỗ trợ SUSFS**: ${{ github.event.inputs.susfs_enable }}
+          - **Hỗ trợ KPM**: ${{ github.event.inputs.kpm_enable }}
+          - **Hỗ trợ LZ4**: ${{ github.event.inputs.lz4_enable }}
+          - **Hỗ trợ LZ4KD**: ${{ github.event.inputs.lz4kd_enable }}
+          - **Tối ưu mạng (IPSet)**: ${{ github.event.inputs.better_net }}
+          - **Thuật toán BBR/Brutal**: ${{ github.event.inputs.bbr_enable }}
+          - **Samsung SSG IO**: ${{ github.event.inputs.ssg_enable }}
+          - **Hỗ trợ Re-Kernel**: ${{ github.event.inputs.rekernel_enable }}
+          - **Bảo vệ Baseband (BBG)**: ${{ github.event.inputs.baseband_guard }}
+          
+          ### 📥 Tải xuống Manager:
+          - ReSukiSU Manager: [ReSukiSU_CI](https://github.com/cctv18/ReSukiSU_CI/releases)
+          - SukiSU Ultra Manager: [SukiSU-Ultra](https://github.com/SukiSU-Ultra/SukiSU-Ultra/releases)
+          - KernelSU Next Manager: [KernelSU-Next](https://github.com/KernelSU-Next/KernelSU-Next/releases)
+          - KernelSU Official Manager: [KernelSU](https://github.com/tiann/KernelSU/releases)
+          
+          ### ⏫️ Nội dung cập nhật:
+          - Cập nhật ${{ env.KSU_TYPENAME }} lên phiên bản mới nhất (${{ needs.build.outputs.ksuver }})
+          - (Dự phòng)
+          
+          ### 📋 Hướng dẫn Cài đặt | Installation Guide
+          1. Nếu máy đã có Custom Recovery (như TWRP), hãy tải file AnyKernel3 tương ứng, vào Recovery để flash và khởi động lại.
+          2. Nếu máy đã có Root, cài đặt [HorizonKernelFlasher](https://github.com/libxzr/HorizonKernelFlasher/releases), dùng nó để flash file AnyKernel3 và khởi động lại.
+          3. Nếu trước đó đã flash Kernel SukiSU Ultra và Manager là bản mới nhất, có thể dùng luôn Manager để flash AnyKernel3.
+          4. **Lưu ý ZRAM**: Nếu chuyển từ bản CÓ patch lz4kd sang KHÔNG có patch, vui lòng TẮT module zram trước khi flash để tránh lỗi.
+          5. **Lưu ý Module**: Do KernelSU đã cập nhật tính năng Meta-module, các bản Manager mới (trừ KernelSU Next) cần có Meta-module để mount bình thường. Các meta-module phổ biến: [meta overlayfs](https://github.com/KernelSU-Modules-Repo/meta-overlayfs), [mountify](https://github.com/backslashxx/mountify), [meta magicmount](https://github.com/7a72/meta-magic_mount/), [hybrid mount](https://github.com/YuzakiKokuban/meta-hybrid_mount). Nếu mới cài KSU lần đầu hoặc vừa nâng cấp Manager, hãy cài 1 Meta-module trước để các module khác hoạt động.
+          6. **Lưu ý KPN**: KernelPatch Next (KPN) là bản KPM độc lập, chạy trên mọi môi trường KSU/Magisk (không hỗ trợ Apatch). KHÔNG dùng chung với KPM có sẵn của (Re)SukiSU. Trước khi dùng KPN, hãy đảm bảo Kernel của bạn chưa có KPM.
+          
+          > [!CAUTION]
+          > #### ※※※ Flash Kernel luôn tiềm ẩn rủi ro! Để tránh brick máy, VUI LÒNG DÙNG [KernelFlasher](https://github.com/capntrips/KernelFlasher) ĐỂ BACKUP PHÂN VÙNG BOOT TRƯỚC KHI FLASH! ※※※
+          EOF
+
+          gh release create "$NEW_TAG" \
+            --repo "${{ github.repository }}" \
+            --title "${{ env.TAG_HEAD }}-${{ env.FULL_VERSION }} (Rev ${NEW_TAG##*-r})" \
+            --notes-file release_notes.md \
+            release_zips/AnyKernel3_*.zip
+
+      - name: 📢 Gửi thông báo Telegram (Kênh)
+        env:
+          TK_BOT_TK: ${{ secrets.TK_BOT_TK }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+        run: |
+          set -euo pipefail
+          
+          TEXT=$(cat <<EOF
+          <b>New FastBuild Kernel Release:</b>
+          
+          Branch: <code>${{ github.ref_name }}</code>
+          Tag: <code>${NEW_TAG}</code>
+          Kernel: <code>${{ env.FULL_VERSION }}</code>
+          
+          Features: 
+          <pre>KSU Variant = ${{ env.KSU_TYPENAME }}
+          SuSFS = ${{ github.event.inputs.susfs_enable }}
+          KPM = ${{ github.event.inputs.kpm_enable }}
+          LZ4 = ${{ github.event.inputs.lz4_enable }}
+          LZ4KD = ${{ github.event.inputs.lz4kd_enable }}
+          IPSet = ${{ github.event.inputs.better_net }}
+          BBR = ${{ github.event.inputs.bbr_enable }}
+          SSG = ${{ github.event.inputs.ssg_enable }}
+          Re-Kernel = ${{ github.event.inputs.rekernel_enable }}
+          BBG = ${{ github.event.inputs.baseband_guard }}</pre>
+          
+          Download: <a href="https://github.com/${{ github.repository }}/releases/tag/${NEW_TAG}">Click Here</a>
+          EOF
+          )
+
+          curl -s "https://api.telegram.org/bot${TK_BOT_TK}/sendMessage" \
+            -d chat_id="${CHAT_ID}" \
+            -d parse_mode="HTML" \
+            --data-urlencode text="${TEXT}"
+
+      - name: 📢 Gửi thông báo Telegram (Nhóm ReSukiSU)
+        env:
+          TK_BOT_TK: ${{ secrets.TK_BOT_TK }}
+          CHAT_ID: ${{ secrets.TK_CHAT_ID_2 }}
+          message_thread_id: ${{secrets.MESSAGE_THREAD_ID}}
+        run: |
+          set -euo pipefail
+          
+          TEXT=$(cat <<EOF
+          <b>New FastBuild Kernel Release:</b>
+          
+          Branch: <code>${{ github.ref_name }}</code>
+          Tag: <code>${NEW_TAG}</code>
+          Kernel: <code>${{ env.FULL_VERSION }}</code>
+          
+          Features: 
+          <pre>KSU Variant = ${{ env.KSU_TYPENAME }}
+          SuSFS = ${{ github.event.inputs.susfs_enable }}
+          KPM = ${{ github.event.inputs.kpm_enable }}
+          LZ4 = ${{ github.event.inputs.lz4_enable }}
+          LZ4KD = ${{ github.event.inputs.lz4kd_enable }}
+          IPSet = ${{ github.event.inputs.better_net }}
+          BBR = ${{ github.event.inputs.bbr_enable }}
+          SSG = ${{ github.event.inputs.ssg_enable }}
+          Re-Kernel = ${{ github.event.inputs.rekernel_enable }}
+          BBG = ${{ github.event.inputs.baseband_guard }}</pre>
+          
+          Download: <a href="https://t.me/psd-kernel">View In Channel</a>
+          EOF
+          )
+
+          curl -s "https://api.telegram.org/bot${TK_BOT_TK}/sendMessage" \
+            -d chat_id="${CHAT_ID}" \
+            -d message_thread_id="${message_thread_id}" \
+            -d parse_mode="HTML" \
+            --data-urlencode text="${TEXT}"
+
+      - name: 📢 Gửi thông báo Telegram (Nhóm thảo luận)
+        env:
+          TK_BOT_TK: ${{ secrets.TK_BOT_TK }}
+          CHAT_ID: ${{ secrets.CHAT_ID_3 }}
+          message_thread_id: ${{secrets.MESSAGE_THREAD_ID_2}}
+        run: |
+          set -euo pipefail
+          
+          TEXT=$(cat <<EOF
+          <b>New FastBuild Kernel Release:</b>
+          
+          Branch: <code>${{ github.ref_name }}</code>
+          Tag: <code>${NEW_TAG}</code>
+          Kernel: <code>${{ env.FULL_VERSION }}</code>
+          
+          Features: 
+          <pre>KSU Variant = ${{ env.KSU_TYPENAME }}
+          SuSFS = ${{ github.event.inputs.susfs_enable }}
+          KPM = ${{ github.event.inputs.kpm_enable }}
+          LZ4 = ${{ github.event.inputs.lz4_enable }}
+          LZ4KD = ${{ github.event.inputs.lz4kd_enable }}
+          IPSet = ${{ github.event.inputs.better_net }}
+          BBR = ${{ github.event.inputs.bbr_enable }}
+          SSG = ${{ github.event.inputs.ssg_enable }}
+          Re-Kernel = ${{ github.event.inputs.rekernel_enable }}
+          BBG = ${{ github.event.inputs.baseband_guard }}</pre>
+          
+          Download: <a href="https://t.me/psd-kernel">View In Channel</a>
+          EOF
+          )
+
+          curl -s "https://api.telegram.org/bot${TK_BOT_TK}/sendMessage" \
+            -d chat_id="${CHAT_ID}" \
+            -d message_thread_id="${message_thread_id}" \
+            -d parse_mode="HTML" \
+            --data-urlencode text="${TEXT}"
