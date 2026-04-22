@@ -110,7 +110,7 @@ jobs:
       - name: ⚙️ Khởi tạo Biến môi trường phiên bản
         run: |
           echo "SUB_VERSION=${{ github.event.inputs.sub_version }}" >> $GITHUB_ENV
-          echo "CCACHE_KEY=ccache-ecsv1-6.1.${{ github.event.inputs.sub_version }}" >> $GITHUB_ENV
+          echo "CCACHE_KEY=ccache-ecsv2-6.1.${{ github.event.inputs.sub_version }}" >> $GITHUB_ENV
 
       - name: 📦 Cài đặt thư viện + Khởi tạo Source & Toolchain LLVM-Clang20
         run: |
