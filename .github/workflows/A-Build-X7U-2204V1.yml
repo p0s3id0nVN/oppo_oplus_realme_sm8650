@@ -1,4 +1,4 @@
-name: 🚀 Build OKI Kernel 6.1.x (BBK)
+name: 🚀 V1 Build OKI Kernel 6.1.x (BBK)
 
 env:
   TZ: Asia/Ho_Chi_Minh
@@ -41,12 +41,14 @@ jobs:
           sudo apt-mark hold firefox libc-bin && sudo apt purge -y man-db && sudo rm -rf /var/lib/man-db/auto-update
           sudo apt update && sudo apt-get install -y --no-install-recommends binutils python-is-python3 libssl-dev libelf-dev curl bison flex clang dwarves git lld pahole zip perl make gcc bc cpio xz-utils tar unzip
 
-          wget -q https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/lib/ccache-x86-64 -O ccache
-          sudo install -m 755 ccache /usr/bin/ccache && rm ccache
+          wget -q https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/lib/ccache-x86-64 -O ccache || true
+          if [ -f ccache ]; then sudo install -m 755 ccache /usr/bin/ccache && rm ccache; fi
 
           mkdir kernel_workspace && cd kernel_workspace
           ZIP_URL="https://github.com/cctv18/android_kernel_common_oneplus_sm8650/archive/refs/heads/oneplus/sm8650_b_16.0.0_oneplus12_6.1.${{ inputs.sub_version }}.zip"
-          [[ "${{ inputs.sub_version }}" == "118" ]] && ZIP_URL="https://github.com/cctv18/android_kernel_common_oneplus_sm8650/archive/refs/heads/oneplus/sm8650_b_16.0.0_oneplus12.zip"
+          if [ "${{ inputs.sub_version }}" == "118" ]; then
+            ZIP_URL="https://github.com/cctv18/android_kernel_common_oneplus_sm8650/archive/refs/heads/oneplus/sm8650_b_16.0.0_oneplus12.zip"
+          fi
           
           aria2c -s16 -x16 -k1M "$ZIP_URL" -o common.zip && unzip -q common.zip && mv android_kernel_common_oneplus_sm8650-* common && rm common.zip
           aria2c -s16 -x16 -k1M https://github.com/cctv18/oneplus_sm8650_toolchain/releases/download/LLVM-Clang20-r547379/clang-r547379.zip -o clang.zip && mkdir clang20 && unzip -q clang.zip -d clang20 && rm clang.zip
@@ -83,42 +85,49 @@ jobs:
               KSUVER=$(expr $(cd KernelSU && git rev-list --count main) + 30700) ;;
             ksunext)
               curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/refs/heads/dev-susfs/kernel/setup.sh" | bash -s dev-susfs
-              KSUVER=$(expr $(curl -sI "https://api.github.com/repos/pershoot/KernelSU-Next/commits?sha=dev&per_page=1" | sed -n 's/.*page=\([0-9]*\)>; rel="last".*/\1/p') "+" 30000)
+              KSUVER=$(expr $(curl -sI "https://api.github.com/repos/pershoot/KernelSU-Next/commits?sha=dev&per_page=1" | sed -n 's/.*page=\([0-9]*\)>; rel="last".*/\1/p') "+" 30000 2>/dev/null || echo 30000)
               sed -i "s/KSU_VERSION_FALLBACK := 1/KSU_VERSION_FALLBACK := $KSUVER/g" KernelSU-Next/kernel/Kbuild
               wget -q https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/other_patch/apk_sign.patch && patch -d common/drivers/kernelsu -p2 -N -F 3 < apk_sign.patch || true ;;
             ksu)
               curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/refs/heads/main/kernel/setup.sh" | bash -s main
-              KSUVER=$(expr $(curl -sI "https://api.github.com/repos/tiann/KernelSU/commits?sha=main&per_page=1" | sed -n 's/.*page=\([0-9]*\)>; rel="last".*/\1/p') "+" 30000)
+              KSUVER=$(expr $(curl -sI "https://api.github.com/repos/tiann/KernelSU/commits?sha=main&per_page=1" | sed -n 's/.*page=\([0-9]*\)>; rel="last".*/\1/p') "+" 30000 2>/dev/null || echo 30000)
               sed -i "s/DKSU_VERSION=16/DKSU_VERSION=${KSUVER}/" KernelSU/kernel/Kbuild ;;
             *) KSUVER="0" ;;
           esac
           echo "KSUVER=$KSUVER" >> $GITHUB_ENV; echo "ksuver=$KSUVER" >> $GITHUB_OUTPUT
 
-          if [[ "${{ inputs.susfs_enable }}" == "true" && "${{ inputs.ksu_type }}" != "none" ]]; then
+          if [ "${{ inputs.susfs_enable }}" == "true" ] && [ "${{ inputs.ksu_type }}" != "none" ]; then
             git clone --depth=1 https://github.com/cctv18/susfs4oki.git susfs4ksu -b oki-${{ env.ANDROID_VERSION }}-${{ env.KERNEL_VERSION }}
             cp -r susfs4ksu/kernel_patches/fs/* common/fs/ && cp -r susfs4ksu/kernel_patches/include/linux/* common/include/linux/
-            cp susfs4ksu/kernel_patches/50_add_susfs*.patch common/ && wget -qO common/69_hide_stuff.patch https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/other_patch/69_hide_stuff.patch
-            cd common && patch -p1 < 50_add_susfs*.patch && patch -p1 -N -F 3 < 69_hide_stuff.patch; cd ..
-            [[ "${{ inputs.ksu_type }}" == "ksu" ]] && patch -d KernelSU -p1 < susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch || true
+            cp susfs4ksu/kernel_patches/50_add_susfs*.patch common/
+            wget -qO common/69_hide_stuff.patch https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/other_patch/69_hide_stuff.patch || true
+            cd common && patch -p1 < 50_add_susfs*.patch && patch -p1 -N -F 3 < 69_hide_stuff.patch || true; cd ..
+            if [ "${{ inputs.ksu_type }}" == "ksu" ]; then
+              patch -d KernelSU -p1 < susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch || true
+            fi
           fi
 
-          if [[ "${{ inputs.lz4_enable }}" == "true" ]]; then
+          if [ "${{ inputs.lz4_enable }}" == "true" ]; then
             git clone --depth=1 https://github.com/$GITHUB_REPOSITORY.git -b $GITHUB_REF_NAME repo_tmp
             cp repo_tmp/zram_patch/001-lz4.patch repo_tmp/zram_patch/002-zstd.patch common/ && cp repo_tmp/zram_patch/lz4armv8.S common/lib/
-            cd common && git apply -p1 < 001-lz4.patch && patch -p1 < 002-zstd.patch; cd ..
+            cd common && git apply -p1 < 001-lz4.patch || true; patch -p1 < 002-zstd.patch || true; cd ..
           fi
 
       - name: ⚙️ Tiêm Defconfig & Hậu tố
         run: |
-          cd kernel_workspace/common; DEF=arch/arm64/configs/gki_defconfig
-          {
-            echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y"; echo "CONFIG_HEADERS_INSTALL=n"
-            echo "CONFIG_TMPFS_XATTR=y"; echo "CONFIG_TMPFS_POSIX_ACL=y"
-            [[ "${{ inputs.ksu_type }}" != "none" ]] && echo "CONFIG_KSU=y"
-            [[ "${{ inputs.kpm_enable }}" == "builtin" && "${{ inputs.ksu_type }}" =~ (sukisu|resukisu) ]] && echo "CONFIG_KPM=y"
+          cd kernel_workspace/common
+          DEF=arch/arm64/configs/gki_defconfig
+          
+          echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y" >> $DEF
+          echo "CONFIG_HEADERS_INSTALL=n" >> $DEF
+          echo "CONFIG_TMPFS_XATTR=y" >> $DEF
+          echo "CONFIG_TMPFS_POSIX_ACL=y" >> $DEF
+          
+          if [ "${{ inputs.ksu_type }}" != "none" ]; then echo "CONFIG_KSU=y" >> $DEF; fi
+          if [ "${{ inputs.kpm_enable }}" == "builtin" ] && [[ "${{ inputs.ksu_type }}" =~ (sukisu|resukisu) ]]; then echo "CONFIG_KPM=y" >> $DEF; fi
             
-            if [[ "${{ inputs.susfs_enable }}" == "true" ]]; then
-              cat <<EOF
+          if [ "${{ inputs.susfs_enable }}" == "true" ]; then
+            cat <<EOF >> $DEF
           CONFIG_KSU_SUSFS=y
           CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y
           CONFIG_KSU_SUSFS_SUS_PATH=y
@@ -135,10 +144,12 @@ jobs:
           CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
           CONFIG_KSU_SUSFS_SUS_MAP=y
           EOF
-            else echo "CONFIG_KSU_SUSFS=n"; fi
+          else 
+            echo "CONFIG_KSU_SUSFS=n" >> $DEF
+          fi
             
-            if [[ "${{ inputs.better_net }}" == "true" ]]; then
-              cat <<EOF
+          if [ "${{ inputs.better_net }}" == "true" ]; then
+            cat <<EOF >> $DEF
           CONFIG_BPF_STREAM_PARSER=y
           CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y
           CONFIG_NETFILTER_XT_SET=y
@@ -163,10 +174,10 @@ jobs:
           CONFIG_IP6_NF_NAT=y
           CONFIG_IP6_NF_TARGET_MASQUERADE=y
           EOF
-            fi
+          fi
             
-            if [[ "${{ inputs.bbr_enable }}" != "false" ]]; then
-              cat <<EOF
+          if [ "${{ inputs.bbr_enable }}" != "false" ]; then
+            cat <<EOF >> $DEF
           CONFIG_TCP_CONG_ADVANCED=y
           CONFIG_TCP_CONG_BBR=y
           CONFIG_TCP_CONG_CUBIC=y
@@ -176,34 +187,46 @@ jobs:
           CONFIG_TCP_CONG_HTCP=y
           CONFIG_TCP_CONG_BRUTAL=y
           EOF
-              [[ "${{ inputs.bbr_enable }}" == "default" ]] && echo "CONFIG_DEFAULT_TCP_CONG=bbr" || echo "CONFIG_DEFAULT_TCP_CONG=cubic"
-            fi
+            if [ "${{ inputs.bbr_enable }}" == "default" ]; then echo "CONFIG_DEFAULT_TCP_CONG=bbr" >> $DEF; else echo "CONFIG_DEFAULT_TCP_CONG=cubic" >> $DEF; fi
+          fi
             
-            [[ "${{ inputs.ssg_enable }}" == "true" ]] && echo "CONFIG_MQ_IOSCHED_SSG=y" && echo "CONFIG_MQ_IOSCHED_SSG_CGROUP=y"
-            [[ "${{ inputs.rekernel_enable }}" == "true" ]] && echo "CONFIG_REKERNEL=y"
-            [[ "${{ inputs.baseband_guard }}" == "true" ]] && echo "CONFIG_BBG=y"
-          } >> $DEF
+          if [ "${{ inputs.ssg_enable }}" == "true" ]; then 
+            echo "CONFIG_MQ_IOSCHED_SSG=y" >> $DEF
+            echo "CONFIG_MQ_IOSCHED_SSG_CGROUP=y" >> $DEF
+          fi
+          if [ "${{ inputs.rekernel_enable }}" == "true" ]; then echo "CONFIG_REKERNEL=y" >> $DEF; fi
+          if [ "${{ inputs.baseband_guard }}" == "true" ]; then echo "CONFIG_BBG=y" >> $DEF; fi
 
-          [[ "${{ inputs.better_net }}" == "true" ]] && wget -q https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/other_patch/config.patch && patch -p1 -F 3 < config.patch || true
-          [[ "${{ inputs.baseband_guard }}" == "true" ]] && curl -sSL https://github.com/cctv18/Baseband-guard/raw/master/setup.sh | bash && sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' security/Kconfig
+          if [ "${{ inputs.better_net }}" == "true" ]; then 
+            wget -q https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/other_patch/config.patch && patch -p1 -F 3 < config.patch || true
+          fi
+          
+          if [ "${{ inputs.baseband_guard }}" == "true" ]; then 
+            curl -sSL https://github.com/cctv18/Baseband-guard/raw/master/setup.sh | bash || true
+            sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' security/Kconfig || true
+          fi
+          
           sed -i 's/check_defconfig//' build.config.gki
           
-          SUFFIX="${{ inputs.kernel_suffix }}"; [ -z "$SUFFIX" ] && SUFFIX="${{ env.KERNEL_NAME }}"
+          SUFFIX="${{ inputs.kernel_suffix }}"
+          if [ -z "$SUFFIX" ]; then SUFFIX="${{ env.KERNEL_NAME }}"; fi
           for f in scripts/setlocalversion; do sed -i "\$s|echo \"\\\$res\"|echo \"-$SUFFIX\"|" "$f"; done
 
       - name: 🔨 Biên dịch & Ccache
         run: |
-          export PATH="/usr/lib/ccache:$(pwd)/kernel_workspace/clang20/bin:$(pwd)/kernel_workspace/build-tools/bin:$PATH"
+          export PATH="/usr/lib/ccache:${{ github.workspace }}/kernel_workspace/clang20/bin:${{ github.workspace }}/kernel_workspace/build-tools/bin:$PATH"
           export CCACHE_COMPILERCHECK="none" CCACHE_BASEDIR="${{ github.workspace }}" CCACHE_DIR="${{ env.CCACHE_DIR }}"
           echo "sloppiness = file_stat_matches,include_file_ctime,include_file_mtime,pch_defines,file_macro,time_macros" >> "$CCACHE_DIR/ccache.conf"
           
           cd kernel_workspace/common
-          wget -q https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/lib/libfakestat.so https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/lib/libfaketimeMT.so && chmod 777 *.so
+          wget -q https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/lib/libfakestat.so https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/lib/libfaketimeMT.so || true
+          chmod 777 *.so || true
           export FAKESTAT="2025-05-25 12:00:00" FAKETIME="@2025-05-25 13:00:00" PRELOAD_LIBS="$(pwd)/libfakestat.so $(pwd)/libfaketimeMT.so"
           
           for w in cc ld; do
-            echo "#!/bin/bash" > $w-wrapper; echo "export LD_PRELOAD=\"$PRELOAD_LIBS\" FAKESTAT=\"$FAKESTAT\" FAKETIME=\"$FAKETIME\"" >> $w-wrapper
-            [[ "$w" == "cc" ]] && echo "ccache clang \"\$@\"" >> $w-wrapper || echo "ld.lld \"\$@\"" >> $w-wrapper
+            echo "#!/bin/bash" > $w-wrapper
+            echo "export LD_PRELOAD=\"$PRELOAD_LIBS\" FAKESTAT=\"$FAKESTAT\" FAKETIME=\"$FAKETIME\"" >> $w-wrapper
+            if [ "$w" == "cc" ]; then echo "ccache clang \"\$@\"" >> $w-wrapper; else echo "ld.lld \"\$@\"" >> $w-wrapper; fi
             chmod +x $w-wrapper
           done
 
@@ -213,24 +236,31 @@ jobs:
       - name: 💾 Đóng gói AnyKernel3
         id: create_zip
         run: |
-          cd kernel_workspace/common/out/arch/arm64/boot
-          if [[ "${{ inputs.kpm_enable }}" == "builtin" && "${{ inputs.ksu_type }}" =~ (sukisu|resukisu) ]]; then
-            wget -q https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/latest/download/patch_linux && chmod +x patch_linux && ./patch_linux && mv oImage Image
-          elif [[ "${{ inputs.kpm_enable }}" == "kpn" ]]; then
-            wget -q https://github.com/KernelSU-Next/KPatch-Next/releases/latest/download/kptools-linux https://github.com/KernelSU-Next/KPatch-Next/releases/latest/download/kpimg-linux && chmod +x kptools-linux && ./kptools-linux -p -i ./Image -k ./kpimg-linux -o ./oImage && mv oImage Image
+          cd ${{ github.workspace }}/kernel_workspace/common/out/arch/arm64/boot
+          
+          if [ "${{ inputs.kpm_enable }}" == "builtin" ] && [[ "${{ inputs.ksu_type }}" =~ (sukisu|resukisu) ]]; then
+            wget -q https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/latest/download/patch_linux && chmod +x patch_linux && ./patch_linux && mv oImage Image || true
+          elif [ "${{ inputs.kpm_enable }}" == "kpn" ]; then
+            wget -q https://github.com/KernelSU-Next/KPatch-Next/releases/latest/download/kptools-linux https://github.com/KernelSU-Next/KPatch-Next/releases/latest/download/kpimg-linux && chmod +x kptools-linux && ./kptools-linux -p -i ./Image -k ./kpimg-linux -o ./oImage && mv oImage Image || true
           fi
           
-          cd ../../../../.. && git clone --depth=1 https://github.com/p0s3id0nVN/AnyKernel3 && rm -rf AnyKernel3/.git
+          cd ${{ github.workspace }}/kernel_workspace
+          git clone --depth=1 https://github.com/p0s3id0nVN/AnyKernel3 && rm -rf AnyKernel3/.git
           cp common/out/arch/arm64/boot/Image AnyKernel3/
           cd AnyKernel3
           
-          [[ "${{ inputs.lz4kd_enable }}" == "true" ]] && wget -q https://raw.githubusercontent.com/$GITHUB_REPOSITORY/refs/heads/$GITHUB_REF_NAME/zram.zip
-          [[ "${{ inputs.kpm_enable }}" == "kpn" ]] && wget -q https://github.com/cctv18/KPatch-Next/releases/latest/download/kpn.zip
+          if [ "${{ inputs.lz4kd_enable }}" == "true" ]; then wget -q https://raw.githubusercontent.com/$GITHUB_REPOSITORY/refs/heads/$GITHUB_REF_NAME/zram.zip || true; fi
+          if [ "${{ inputs.kpm_enable }}" == "kpn" ]; then wget -q https://github.com/cctv18/KPatch-Next/releases/latest/download/kpn.zip || true; fi
           
-          KTYPE="none"; [[ "${{ inputs.ksu_type }}" == "sukisu" ]] && KTYPE="SukiSU" || [[ "${{ inputs.ksu_type }}" == "resukisu" ]] && KTYPE="ReSukiSU" || [[ "${{ inputs.ksu_type }}" == "ksunext" ]] && KTYPE="KSUNext" || [[ "${{ inputs.ksu_type }}" == "ksu" ]] && KTYPE="KSU"
-          SFX="${{ inputs.kernel_suffix }}"; [ -z "$SFX" ] && SFX="PSD"
+          KTYPE="none"
+          if [ "${{ inputs.ksu_type }}" == "sukisu" ]; then KTYPE="SukiSU"; elif [ "${{ inputs.ksu_type }}" == "resukisu" ]; then KTYPE="ReSukiSU"; elif [ "${{ inputs.ksu_type }}" == "ksunext" ]; then KTYPE="KSUNext"; elif [ "${{ inputs.ksu_type }}" == "ksu" ]; then KTYPE="KSU"; fi
+          
+          SFX="${{ inputs.kernel_suffix }}"
+          if [ -z "$SFX" ]; then SFX="PSD"; fi
+          
           AK3_NAME="AK3_${KTYPE}_${{ env.KSUVER }}_android14-11-${{ env.KERNEL_VERSION }}.${{ inputs.sub_version }}_SUSFS_${SFX}.zip"
-          zip -r ../$AK3_NAME ./*; echo "ak3name=$AK3_NAME" >> $GITHUB_OUTPUT
+          zip -r ../$AK3_NAME ./*
+          echo "ak3name=$AK3_NAME" >> $GITHUB_OUTPUT
 
       - name: 📤 Upload Artifact
         uses: actions/upload-artifact@v4
@@ -247,7 +277,8 @@ jobs:
           mkdir release_zips
           gh run download ${{ github.run_id }} -n ${{ needs.build.outputs.ak3name }} -D release_zips
           
-          SFX="${{ github.event.inputs.kernel_suffix }}"; [ -z "$SFX" ] && SFX="${{ env.KERNEL_NAME }}"
+          SFX="${{ github.event.inputs.kernel_suffix }}"
+          if [ -z "$SFX" ]; then SFX="${{ env.KERNEL_NAME }}"; fi
           FULL_VER="${{ env.KERNEL_VERSION }}.${{ github.event.inputs.sub_version }}-$SFX"
           TAG_BASE="OPPO-OPlus-Realme-build-v${FULL_VER}"
           
@@ -278,14 +309,13 @@ jobs:
           TEXT=$(cat <<EOF
           <b>🚀 HOÀN TẤT BUILD KERNEL!</b>
           🌿 Nhánh: <code>${{ github.ref_name }}</code>
-          🏷️ Phiên bản: <code>${{ env.RELEASE_TAG }}</code>
-          🐧 Tên Kernel: <code>${{ env.FULL_VER }}</code>
+          🏷️ Phiên bản: <code>${RELEASE_TAG}</code>
+          🐧 Tên Kernel: <code>${FULL_VER}</code>
           
-          📥 <b><a href="https://github.com/${{ github.repository }}/releases/tag/${{ env.RELEASE_TAG }}">Bấm vào đây để tải về ZIP AnyKernel3</a></b>
+          📥 <b><a href="https://github.com/${{ github.repository }}/releases/tag/${RELEASE_TAG}">Bấm vào đây để tải về ZIP AnyKernel3</a></b>
           EOF
           )
           
-          # Hỗ trợ gửi qua nhiều nhóm/kênh nếu bạn cấu hình secrets TG_CHAT_ID2
           for chat_id in "${TG_CHAT_ID}" "${{ secrets.TG_CHAT_ID2 }}"; do
             if [ -n "$chat_id" ]; then
               curl -s -X POST "https://api.telegram.org/bot${TG_BOT_TK}/sendMessage" \
